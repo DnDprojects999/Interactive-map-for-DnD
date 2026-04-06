@@ -219,14 +219,14 @@ button {
 
 .slides {
   display: flex;
-  width: 200%;
+  width: 100%;
   height: 100%;
   transition: transform 0.35s ease;
 }
 
 .slide {
   position: relative;
-  flex: 0 0 50%;
+  flex: 0 0 100%;
   height: 100%;
   padding: 22px;
 }
