@@ -37,7 +37,7 @@ function getMaxHandleX() {
 
 function setSlide(index) {
   currentSlide = index;
-  slides.style.transform = `translateX(-${index * 50}%)`;
+  slides.style.transform = `translateX(-${index * 100}%)`;
 
   const maxX = getMaxHandleX();
   switchHandle.style.transform = `translateX(${index === 1 ? maxX : 0}px)`;
