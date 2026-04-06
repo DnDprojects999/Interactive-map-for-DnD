@@ -119,11 +119,6 @@ button {
   box-shadow: 0 10px 24px rgba(0,0,0,0.25);
   z-index: 2;
   cursor: grab;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #ffffff;
-  font-size: 18px;
   transition: transform 0.28s ease;
 }
 
@@ -609,4 +604,55 @@ button {
   .info-panel {
     width: min(100%, 340px);
   }
+}
+.map-background {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  transition: opacity 0.25s ease;
+  user-select: none;
+}
+
+.sketch-layer {
+  background:
+    linear-gradient(135deg, rgba(255, 80, 80, 0.10), rgba(255, 80, 80, 0.03)),
+    repeating-linear-gradient(
+      -35deg,
+      rgba(255,255,255,0.045) 0px,
+      rgba(255,255,255,0.045) 2px,
+      transparent 2px,
+      transparent 14px
+    );
+  color: rgba(255, 220, 220, 0.88);
+}
+
+.art-layer {
+  background:
+    radial-gradient(circle at 30% 30%, rgba(255,255,255,0.10), transparent 18%),
+    radial-gradient(circle at 70% 60%, rgba(255,255,255,0.08), transparent 20%),
+    linear-gradient(135deg, rgba(120, 80, 255, 0.12), rgba(255, 120, 120, 0.10));
+  color: rgba(230, 235, 255, 0.92);
+}
+
+.map-stage.sketch-mode .sketch-layer {
+  opacity: 1;
+}
+
+.map-stage.sketch-mode .art-layer {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.map-stage.art-mode .sketch-layer {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.map-stage.art-mode .art-layer {
+  opacity: 1;
 }
