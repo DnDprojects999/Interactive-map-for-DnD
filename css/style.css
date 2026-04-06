@@ -41,11 +41,14 @@ button {
   align-items: center;
   gap: 18px;
   padding: 0 20px;
-  z-index: 50;
-  background: linear-gradient(to bottom, rgba(10, 12, 18, 0.92), rgba(10, 12, 18, 0.74));
+  z-index: 100;
+  background: linear-gradient(to bottom, rgba(10, 12, 18, 0.94), rgba(10, 12, 18, 0.78));
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--line);
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.30),
+    0 20px 40px rgba(0, 0, 0, 0.18),
+    0 1px 0 rgba(255,255,255,0.04) inset;
 }
 
 .brand {
