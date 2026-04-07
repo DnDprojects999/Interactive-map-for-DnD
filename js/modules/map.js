@@ -50,6 +50,9 @@ export function createMapModule(els, state, ui) {
     const stopPanning = (event) => {
       if (!state.isPanning) return;
       if (event && event.pointerId !== state.panPointerId) return;
+      if (typeof state.panPointerId === "number" && els.mapStage.hasPointerCapture(state.panPointerId)) {
+        els.mapStage.releasePointerCapture(state.panPointerId);
+      }
       state.isPanning = false;
       state.panPointerId = null;
       els.mapStage.classList.remove("panning");

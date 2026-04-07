@@ -37,14 +37,14 @@ export function createEditorModule(els, state, ui, mapModule) {
     refreshGroupButtonsSelection();
   }
 
-  function createMarkerElement(marker) {
+  function createMarkerElement(marker, groupsById) {
     const markerEl = document.createElement("button");
     markerEl.className = "marker";
     markerEl.dataset.group = marker.group;
     markerEl.style.left = `${marker.x}%`;
     markerEl.style.top = `${marker.y}%`;
 
-    const group = state.groupsData.find((g) => g.id === marker.group);
+    const group = groupsById.get(marker.group);
     if (group?.color) markerEl.style.background = group.color;
     if (group?.enabled === false) markerEl.classList.add("hidden");
 
@@ -89,7 +89,10 @@ export function createEditorModule(els, state, ui, mapModule) {
 
   function renderMarkers() {
     els.markersContainer.innerHTML = "";
-    state.markersData.forEach((marker) => els.markersContainer.appendChild(createMarkerElement(marker)));
+    const groupsById = new Map(state.groupsData.map((group) => [group.id, group]));
+    const fragment = document.createDocumentFragment();
+    state.markersData.forEach((marker) => fragment.appendChild(createMarkerElement(marker, groupsById)));
+    els.markersContainer.appendChild(fragment);
   }
 
   function toggleEditMode(force) {

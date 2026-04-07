@@ -10,6 +10,7 @@ const ui = createUI(els, state);
 const mapModule = createMapModule(els, state, ui);
 const editor = createEditorModule(els, state, ui, mapModule);
 ui.setSidebarRenderers({ mapButtonsRenderer: editor.renderGroups });
+const panelEditableFields = [els.panelTitle, els.panelSubtitle, els.panelText, els.fact1, els.fact2, els.fact3];
 
 function setupTopLevelInteractions() {
   els.panelButton.addEventListener("click", () => ui.togglePanel());
@@ -46,8 +47,7 @@ function setupTopLevelInteractions() {
     }
   }, { passive: false });
 
-  [els.panelTitle, els.panelSubtitle, els.panelText, els.fact1, els.fact2, els.fact3]
-    .forEach((el) => el.addEventListener("input", ui.savePanelToCurrentMarker));
+  panelEditableFields.forEach((el) => el.addEventListener("input", ui.savePanelToCurrentMarker));
 }
 
 async function init() {
