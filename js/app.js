@@ -59,7 +59,6 @@ async function init() {
   }
 }
 
-ui.setSlide(0);
 ui.setStyleMode(0);
 ui.setPanelEditable(false);
 ui.setModeWord("", false);

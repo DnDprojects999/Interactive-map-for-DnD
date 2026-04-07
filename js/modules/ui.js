@@ -1,9 +1,4 @@
 export function createUI(els, state) {
-  function setSlide(index) {
-    state.currentSlide = index;
-    els.slides.style.transform = `translateX(-${index * 100}%)`;
-  }
-
   function setStyleMode(index) {
     state.currentStyleMode = index;
     const maxX = els.styleSwitch.clientWidth - els.styleHandle.clientWidth - 8;
@@ -29,7 +24,6 @@ export function createUI(els, state) {
     state.timelineMode = true;
     setModeWord("Timeline", false);
     document.body.classList.add("timeline-mode");
-    setSlide(1);
     setTimeout(() => setModeWord("Timeline", true), 120);
   }
 
@@ -37,7 +31,6 @@ export function createUI(els, state) {
     state.timelineMode = false;
     setModeWord("Map", true);
     document.body.classList.remove("timeline-mode");
-    setSlide(0);
     setTimeout(() => setModeWord("", false), 180);
   }
 
@@ -90,7 +83,6 @@ export function createUI(els, state) {
   }
 
   return {
-    setSlide,
     setStyleMode,
     togglePanel,
     setModeWord,

@@ -37,8 +37,6 @@
     </div>
   </header>
 
-  <button class="map-return" id="mapReturnButton">Map</button>
-
   <div class="workspace">
     <aside class="sidebar">
       <div class="sidebar-title">Слои</div>
@@ -46,41 +44,39 @@
     </aside>
 
     <div class="content panel-open" id="content">
-      <div class="slides" id="slides">
-        <section class="slide">
-          <div class="map-shell">
-            <div class="map-stage sketch-mode" id="mapStage">
-              <div class="map-transform" id="mapTransform">
-                <div class="map-grid"></div>
-                <div class="map-fog"></div>
+      <div class="map-shell">
+        <div class="map-stage sketch-mode" id="mapStage">
+          <div class="map-transform" id="mapTransform">
+            <div class="map-grid"></div>
+            <div class="map-fog"></div>
 
-                <div class="map-background sketch-layer">Скетч карты</div>
-                <div class="map-background art-layer">Арт карты</div>
+            <div class="map-background sketch-layer">Скетч карты</div>
+            <div class="map-background art-layer">Арт карты</div>
 
-                <div id="markersContainer"></div>
-              </div>
-
-              <div class="map-caption" id="mapCaption">
-                Сейчас включён режим: скетч
-              </div>
-
-              <div class="editor-hint" id="editorHint">Ctrl+Shift+` — включить режим редактирования</div>
-            </div>
+            <div id="markersContainer"></div>
           </div>
-        </section>
 
-        <section class="slide">
-          <div class="timeline-shell">
-            <h1 class="timeline-title">Timeline</h1>
-            <p class="timeline-subtitle">
-              Прокручивай колёсиком мыши, чтобы двигаться по событиям. В будущем здесь будут эпохи, войны, правители и катастрофы.
-            </p>
-
-            <div class="timeline-track"></div>
-            <div class="timeline-events" id="timelineContainer"></div>
+          <div class="map-caption" id="mapCaption">
+            Сейчас включён режим: скетч
           </div>
-        </section>
+
+          <div class="editor-hint" id="editorHint">Ctrl+Shift+` — включить режим редактирования</div>
+        </div>
       </div>
+
+      <section class="timeline-drawer" id="timelineDrawer">
+        <div class="timeline-shell">
+          <h1 class="timeline-title">Timeline</h1>
+          <p class="timeline-subtitle">
+            Прокручивай колёсиком мыши, чтобы двигаться по событиям. В будущем здесь будут эпохи, войны, правители и катастрофы.
+          </p>
+          <div class="timeline-track"></div>
+          <div class="timeline-events" id="timelineContainer"></div>
+        </div>
+        <div class="timeline-strip">
+          <button class="map-return" id="mapReturnButton">Map</button>
+        </div>
+      </section>
 
       <aside class="info-panel" id="infoPanel">
         <div class="panel-handle" id="panelHandle">◀</div>

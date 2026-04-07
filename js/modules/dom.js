@@ -5,7 +5,6 @@ export function getElements() {
     timelineOpenButton: document.getElementById("timelineOpenButton"),
     mapReturnButton: document.getElementById("mapReturnButton"),
 
-    slides: document.getElementById("slides"),
     styleHandle: document.getElementById("styleHandle"),
     styleSwitch: document.getElementById("styleSwitch"),
     mapStage: document.getElementById("mapStage"),
