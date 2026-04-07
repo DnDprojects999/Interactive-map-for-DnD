@@ -103,7 +103,6 @@ export function createEditorModule(els, state, ui, mapModule) {
       state.editorGroupId = state.groupsData[0].id;
     }
 
-    els.editModeButton.textContent = state.editMode ? "Режим: редактирование" : "Режим: просмотр";
     els.exportDataButton.hidden = !state.editMode;
     ui.setPanelEditable(state.editMode);
     refreshGroupButtonsSelection();
@@ -151,7 +150,6 @@ export function createEditorModule(els, state, ui, mapModule) {
       ui.updatePanelFromMarker(marker);
     });
 
-    els.editModeButton.addEventListener("click", () => toggleEditMode());
     els.exportDataButton.addEventListener("click", exportMarkersJson);
 
     document.addEventListener("keydown", (event) => {

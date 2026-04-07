@@ -1,5 +1,11 @@
 :root {
   --bg: #0f1117;
+  --map-fill: linear-gradient(180deg, rgba(50, 29, 38, .78), rgba(27, 22, 33, .8));
+  --map-border: rgba(255,60,60,.75);
+  --grid-line: rgba(255,255,255,.04);
+  --fog-a: rgba(255,255,255,.08);
+  --fog-b: rgba(255,255,255,.05);
+  --fog-c: rgba(255,255,255,.06);
   --line: rgba(255, 255, 255, 0.1);
   --line-strong: rgba(255, 255, 255, 0.18);
   --text: #f3f4f6;
@@ -48,6 +54,26 @@ button { font: inherit; }
 .workspace { position: fixed; inset: var(--topbar-h) 0 0 0; transition: filter .4s ease; }
 .sidebar { position: absolute; top: 0; left: 0; bottom: 0; width: var(--sidebar-w); display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 18px 14px; background: linear-gradient(to bottom, rgba(10, 12, 18, .88), rgba(10, 12, 18, .55)); border-right: 1px solid var(--line); z-index: 20; }
 .sidebar-title { font-size: 11px; letter-spacing: .12em; color: var(--muted); text-transform: uppercase; }
+.sidebar-palette {
+  width: 48px;
+  padding: 8px 4px 6px;
+  border-radius: 14px;
+  border: 1px solid var(--line-strong);
+  background: rgba(255,255,255,.06);
+  display: grid;
+  gap: 5px;
+  justify-items: center;
+}
+.sidebar-palette-label { font-size: 14px; line-height: 1; }
+.sidebar-palette-select {
+  width: 40px;
+  border: 1px solid rgba(255,255,255,.24);
+  border-radius: 8px;
+  padding: 2px 4px;
+  font-size: 11px;
+  background: rgba(5,7,12,.82);
+  color: #fff;
+}
 #toolButtonsContainer { display: flex; flex-direction: column; align-items: center; gap: 14px; }
 .tool-btn { width: 48px; height: 48px; border-radius: 14px; border: 1px solid var(--line-strong); background: rgba(255,255,255,.06); color: #fff; cursor: pointer; position: relative; }
 .tool-btn.active { background: rgba(255,255,255,.16); }
@@ -67,17 +93,32 @@ button { font: inherit; }
 .content { position: absolute; inset: 0 0 0 var(--sidebar-w); overflow: hidden; padding: 22px; }
 
 .map-shell, .timeline-shell { width: 100%; height: 100%; border-radius: 28px; border: 1px solid var(--line); background: rgba(255,255,255,.02); position: relative; overflow: hidden; }
-.map-stage { position: absolute; inset: 18px; border-radius: 24px; border: 2px solid rgba(255,60,60,.75); overflow: hidden; cursor: grab; }
+.map-stage { position: absolute; inset: 18px; border-radius: 24px; border: 2px solid var(--map-border); background: var(--map-fill); overflow: hidden; cursor: grab; }
 .map-stage.panning { cursor: grabbing; }
 .map-transform { position: absolute; inset: 0; transform-origin: 0 0; will-change: transform; }
-.map-grid { position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px); background-size: 46px 46px; opacity: .45; }
-.map-fog { position: absolute; inset: 0; background: radial-gradient(circle at 20% 25%, rgba(255,255,255,.08), transparent 18%), radial-gradient(circle at 70% 40%, rgba(255,255,255,.05), transparent 24%), radial-gradient(circle at 55% 78%, rgba(255,255,255,.06), transparent 16%); opacity: .45; }
-.map-caption, .editor-hint { position: absolute; z-index: 8; padding: 10px 12px; border-radius: 12px; background: rgba(13,16,24,.7); border: 1px solid rgba(255,255,255,.08); color: var(--muted); }
-.map-caption { left: 24px; bottom: 20px; }
-.editor-hint { right: 16px; bottom: 20px; font-size: 12px; }
+.map-grid { position: absolute; inset: 0; background-image: linear-gradient(var(--grid-line) 1px, transparent 1px), linear-gradient(90deg, var(--grid-line) 1px, transparent 1px); background-size: 46px 46px; opacity: .45; }
+.map-fog { position: absolute; inset: 0; background: radial-gradient(circle at 20% 25%, var(--fog-a), transparent 18%), radial-gradient(circle at 70% 40%, var(--fog-b), transparent 24%), radial-gradient(circle at 55% 78%, var(--fog-c), transparent 16%); opacity: .45; }
 #markersContainer { position: absolute; inset: 0; z-index: 6; }
 .marker { position: absolute; width: 18px; height: 18px; border-radius: 999px; border: 2px solid rgba(255,255,255,.82); transform: translate(-50%, -50%); cursor: pointer; }
 .marker.hidden { display: none; }
+
+body.palette-night {
+  --map-fill: linear-gradient(180deg, rgba(13, 22, 50, .8), rgba(10, 14, 30, .84));
+  --map-border: rgba(80, 149, 255, .75);
+  --grid-line: rgba(136, 169, 255, .09);
+  --fog-a: rgba(124, 164, 255, .14);
+  --fog-b: rgba(84, 126, 255, .1);
+  --fog-c: rgba(161, 190, 255, .1);
+}
+
+body.palette-frost {
+  --map-fill: linear-gradient(180deg, rgba(24, 47, 65, .82), rgba(16, 33, 48, .86));
+  --map-border: rgba(103, 232, 249, .72);
+  --grid-line: rgba(173, 216, 230, .1);
+  --fog-a: rgba(186, 230, 253, .17);
+  --fog-b: rgba(125, 211, 252, .12);
+  --fog-c: rgba(165, 243, 252, .12);
+}
 
 .info-panel { position: absolute; top: 22px; right: 22px; bottom: 22px; width: min(var(--info-w), calc(100% - 100px)); border-radius: 26px; background: linear-gradient(180deg, rgba(18,22,32,.78), rgba(12,15,24,.72)); border: 1px solid rgba(255,255,255,.12); transform: translateX(calc(100% + 36px)); transition: transform .32s ease; z-index: 40; }
 .content.panel-open .info-panel { transform: translateX(0); }
@@ -319,18 +360,10 @@ button { font: inherit; }
   cursor: pointer;
 }
 
-.map-background { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 34px; font-weight: 700; pointer-events: none; z-index: 3; transition: opacity .25s ease; }
-.sketch-layer { background: linear-gradient(135deg, rgba(255,80,80,.10), rgba(255,80,80,.03)); color: rgba(255,220,220,.88); }
-.art-layer { background: linear-gradient(135deg, rgba(120,80,255,.12), rgba(255,120,120,.10)); color: rgba(230,235,255,.92); }
-.map-stage.sketch-mode .art-layer, .map-stage.art-mode .sketch-layer { opacity: 0; }
-
 body.edit-mode #panelTitle, body.edit-mode #panelSubtitle, body.edit-mode #panelText, body.edit-mode .fact-item { outline: 1px dashed rgba(34,197,94,.5); border-radius: 8px; }
 
 /* Timeline overlay mode */
 body.timeline-mode .info-panel,
-body.timeline-mode #styleSwitch,
-body.timeline-mode #editModeButton,
-body.timeline-mode #panelButton,
 body.timeline-mode #exportDataButton { opacity: 0; pointer-events: none; }
 body.timeline-mode .timeline-drawer {
   transform: translateY(0);

@@ -13,16 +13,10 @@ ui.setSidebarRenderers({ mapButtonsRenderer: editor.renderGroups });
 const panelEditableFields = [els.panelTitle, els.panelSubtitle, els.panelText, els.fact1, els.fact2, els.fact3];
 
 function setupTopLevelInteractions() {
-  els.panelButton.addEventListener("click", () => ui.togglePanel());
   els.panelHandle.addEventListener("click", () => ui.togglePanel());
   els.closePanel.addEventListener("click", () => ui.togglePanel(false));
 
-  els.styleSwitch.addEventListener("click", (event) => {
-    const rect = els.styleSwitch.getBoundingClientRect();
-    const clickX = event.clientX - rect.left;
-    ui.setStyleMode(clickX > rect.width / 2 ? 1 : 0);
-  });
-  els.styleHandle.addEventListener("click", (event) => event.stopPropagation());
+  els.paletteSelect.addEventListener("change", () => ui.setPalette(els.paletteSelect.value));
 
   els.timelineOpenButton.addEventListener("click", () => {
     if (state.archiveMode) {
@@ -74,7 +68,8 @@ async function init() {
   }
 }
 
-ui.setStyleMode(0);
+ui.setPalette(state.currentPalette);
+els.paletteSelect.value = state.currentPalette;
 ui.setPanelEditable(false);
 ui.setModeWord("Map", true);
 ui.togglePanel(true);

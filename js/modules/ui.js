@@ -79,14 +79,12 @@ export function createUI(els, state) {
     }
   }
 
-  function setStyleMode(index) {
-    state.currentStyleMode = index;
-    const maxX = els.styleSwitch.clientWidth - els.styleHandle.clientWidth - 8;
-    els.styleHandle.style.transform = `translateX(${index === 1 ? maxX : 0}px)`;
-
-    els.mapStage.classList.toggle("sketch-mode", index === 0);
-    els.mapStage.classList.toggle("art-mode", index === 1);
-    els.mapCaption.textContent = index === 0 ? "Сейчас включён режим: скетч" : "Сейчас включён режим: арт";
+  function setPalette(paletteName) {
+    const palette = paletteName || "ember";
+    state.currentPalette = palette;
+    document.body.classList.remove("palette-night", "palette-frost");
+    if (palette === "night") document.body.classList.add("palette-night");
+    if (palette === "frost") document.body.classList.add("palette-frost");
   }
 
   function togglePanel(force) {
@@ -334,7 +332,7 @@ export function createUI(els, state) {
 
   return {
     setSidebarRenderers,
-    setStyleMode,
+    setPalette,
     togglePanel,
     setModeWord,
     openTimelineMode,

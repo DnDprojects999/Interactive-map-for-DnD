@@ -7,13 +7,10 @@ export function getElements() {
     archiveOpenButton: document.getElementById("archiveOpenButton"),
     sidebarTitle: document.getElementById("sidebarTitle"),
 
-    styleHandle: document.getElementById("styleHandle"),
-    styleSwitch: document.getElementById("styleSwitch"),
+    paletteSelect: document.getElementById("paletteSelect"),
     mapStage: document.getElementById("mapStage"),
     mapTransform: document.getElementById("mapTransform"),
-    mapCaption: document.getElementById("mapCaption"),
     content: document.getElementById("content"),
-    panelButton: document.getElementById("panelButton"),
     panelHandle: document.getElementById("panelHandle"),
     closePanel: document.getElementById("closePanel"),
     panelTitle: document.getElementById("panelTitle"),
@@ -28,7 +25,6 @@ export function getElements() {
     archiveDrawer: document.getElementById("archiveDrawer"),
     archiveScrollContainer: document.getElementById("archiveScrollContainer"),
     archiveGroupsContainer: document.getElementById("archiveGroupsContainer"),
-    editModeButton: document.getElementById("editModeButton"),
     exportDataButton: document.getElementById("exportDataButton"),
   };
 }
