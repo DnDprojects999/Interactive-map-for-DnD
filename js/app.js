@@ -26,8 +26,12 @@ function setupTopLevelInteractions() {
   els.mapReturnButton.addEventListener("click", () => ui.openMapMode());
 
   els.timelineContainer.addEventListener("wheel", (event) => {
-    if (Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
-      els.timelineContainer.scrollLeft += event.deltaY;
+    const horizontalDelta = event.shiftKey ? event.deltaY + event.deltaX : event.deltaY;
+    if (Math.abs(horizontalDelta) > Math.abs(event.deltaX) || event.shiftKey) {
+      els.timelineContainer.scrollBy({
+        left: horizontalDelta * 1.15,
+        behavior: "smooth",
+      });
       event.preventDefault();
     }
   }, { passive: false });
