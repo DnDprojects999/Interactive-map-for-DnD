@@ -39,8 +39,9 @@
 
   <div class="workspace">
     <aside class="sidebar">
-      <div class="sidebar-title">Слои</div>
+      <div class="sidebar-title" id="sidebarTitle">Слои</div>
       <div id="toolButtonsContainer"></div>
+      <button class="archive-open-btn" id="archiveOpenButton" title="Открыть архив">📖</button>
     </aside>
 
     <div class="content panel-open" id="content">
@@ -75,6 +76,14 @@
         </div>
         <div class="timeline-strip">
           <button class="map-return" id="mapReturnButton">Map</button>
+        </div>
+      </section>
+
+      <section class="archive-drawer" id="archiveDrawer">
+        <div class="archive-shell">
+          <div class="archive-scroll" id="archiveScrollContainer">
+            <div class="archive-groups" id="archiveGroupsContainer"></div>
+          </div>
         </div>
       </section>
 

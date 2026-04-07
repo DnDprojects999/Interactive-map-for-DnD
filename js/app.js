@@ -23,7 +23,16 @@ function setupTopLevelInteractions() {
   });
   els.styleHandle.addEventListener("click", (event) => event.stopPropagation());
 
-  els.timelineOpenButton.addEventListener("click", () => ui.openTimelineMode());
+  els.timelineOpenButton.addEventListener("click", () => {
+    if (state.archiveMode) {
+      ui.openMapMode();
+      return;
+    }
+    if (!state.timelineMode) ui.openTimelineMode();
+  });
+  els.archiveOpenButton.addEventListener("click", () => {
+    if (!state.timelineMode) ui.openArchiveMode();
+  });
   els.mapReturnButton.addEventListener("click", () => ui.openMapMode());
 
   els.timelineContainer.addEventListener("wheel", (event) => {
@@ -47,6 +56,7 @@ async function init() {
     state.groupsData = data.groupsData;
     state.markersData = data.markersData;
     state.eventsData = data.eventsData;
+    state.archiveData = data.archiveData;
     state.editorGroupId = state.groupsData[0]?.id || null;
 
     editor.renderGroups();
@@ -56,7 +66,7 @@ async function init() {
     console.error("Ошибка загрузки данных:", error);
     els.panelTitle.textContent = "Ошибка";
     els.panelSubtitle.textContent = "Не удалось загрузить JSON";
-    els.panelText.textContent = "Проверь пути к файлам data/markers.json и data/timeline.json.";
+    els.panelText.textContent = "Проверь пути к файлам data/markers.json, data/timeline.json и data/archive.json.";
     els.fact1.textContent = "Папка data должна существовать";
     els.fact2.textContent = "JSON должен быть валидным";
     els.fact3.textContent = "Смотри консоль браузера";

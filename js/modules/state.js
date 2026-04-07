@@ -5,11 +5,14 @@ export const state = {
   groupsData: [],
   markersData: [],
   eventsData: [],
+  archiveData: [],
 
   currentMarker: null,
   editMode: false,
   editorGroupId: null,
   timelineMode: false,
+  archiveMode: false,
+  activeArchiveGroupId: null,
 
   mapScale: 1,
   mapOffsetX: 0,

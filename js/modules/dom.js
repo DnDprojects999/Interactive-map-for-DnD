@@ -4,6 +4,8 @@ export function getElements() {
     modeWord: document.getElementById("modeWord"),
     timelineOpenButton: document.getElementById("timelineOpenButton"),
     mapReturnButton: document.getElementById("mapReturnButton"),
+    archiveOpenButton: document.getElementById("archiveOpenButton"),
+    sidebarTitle: document.getElementById("sidebarTitle"),
 
     styleHandle: document.getElementById("styleHandle"),
     styleSwitch: document.getElementById("styleSwitch"),
@@ -23,6 +25,9 @@ export function getElements() {
     toolButtonsContainer: document.getElementById("toolButtonsContainer"),
     markersContainer: document.getElementById("markersContainer"),
     timelineContainer: document.getElementById("timelineContainer"),
+    archiveDrawer: document.getElementById("archiveDrawer"),
+    archiveScrollContainer: document.getElementById("archiveScrollContainer"),
+    archiveGroupsContainer: document.getElementById("archiveGroupsContainer"),
     editModeButton: document.getElementById("editModeButton"),
     exportDataButton: document.getElementById("exportDataButton"),
   };
