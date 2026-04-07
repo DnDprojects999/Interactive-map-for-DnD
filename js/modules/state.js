@@ -1,6 +1,6 @@
 export const state = {
   currentSlide: 0,
-  currentStyleMode: 0,
+  currentPalette: "ember",
 
   groupsData: [],
   markersData: [],

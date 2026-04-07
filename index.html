@@ -23,45 +23,34 @@
     </div>
 
     <div class="topbar-right">
-      <div class="slide-switch" id="styleSwitch">
-        <div class="switch-labels">
-          <div>Скетч</div>
-          <div>Арт</div>
-        </div>
-        <div class="switch-handle" id="styleHandle"></div>
-      </div>
-
-      <button class="btn" id="editModeButton">Режим: просмотр</button>
       <button class="btn" id="exportDataButton" hidden>Экспорт JSON</button>
-      <button class="btn" id="panelButton">Панель</button>
     </div>
   </header>
 
   <div class="workspace">
     <aside class="sidebar">
       <div class="sidebar-title" id="sidebarTitle">Слои</div>
+      <label class="sidebar-palette" for="paletteSelect" title="Палитра карты">
+        <span class="sidebar-palette-label">🎨</span>
+        <select class="sidebar-palette-select" id="paletteSelect">
+          <option value="ember">Ember</option>
+          <option value="night">Night</option>
+          <option value="frost">Frost</option>
+        </select>
+      </label>
       <div id="toolButtonsContainer"></div>
       <button class="archive-open-btn" id="archiveOpenButton" title="Открыть архив">📖</button>
     </aside>
 
     <div class="content panel-open" id="content">
       <div class="map-shell">
-        <div class="map-stage sketch-mode" id="mapStage">
+        <div class="map-stage" id="mapStage">
           <div class="map-transform" id="mapTransform">
             <div class="map-grid"></div>
             <div class="map-fog"></div>
 
-            <div class="map-background sketch-layer">Скетч карты</div>
-            <div class="map-background art-layer">Арт карты</div>
-
             <div id="markersContainer"></div>
           </div>
-
-          <div class="map-caption" id="mapCaption">
-            Сейчас включён режим: скетч
-          </div>
-
-          <div class="editor-hint" id="editorHint">Ctrl+Shift+` — включить режим редактирования</div>
         </div>
       </div>
 
