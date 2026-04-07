@@ -1,4 +1,43 @@
 export function createUI(els, state) {
+  let renderMapSidebarButtons = () => {};
+
+  function setSidebarRenderers({ mapButtonsRenderer }) {
+    renderMapSidebarButtons = typeof mapButtonsRenderer === "function" ? mapButtonsRenderer : () => {};
+  }
+
+  function swapSidebarContent(renderer) {
+    els.toolButtonsContainer.classList.remove("sidebar-fade");
+    renderer();
+    // force reflow for repeated animation trigger
+    void els.toolButtonsContainer.offsetWidth;
+    els.toolButtonsContainer.classList.add("sidebar-fade");
+  }
+
+  function scrollToTimelineEvent(eventId) {
+    const eventCard = els.timelineContainer.querySelector(`[data-event-id="${eventId}"]`);
+    if (!eventCard) return;
+    eventCard.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+  }
+
+  function renderTimelineSidebarButtons() {
+    els.toolButtonsContainer.innerHTML = "";
+
+    const actions = [
+      { label: "Старт", title: "Начало компании", eventId: "founding" },
+      { label: "NOW", title: "Текущая эпоха", eventId: "campaign-start" },
+      { label: "Союз", title: "Союз гильдий", eventId: "guild-union" },
+    ];
+
+    actions.forEach((action) => {
+      const button = document.createElement("button");
+      button.className = "tool-btn active";
+      button.textContent = action.label;
+      button.title = action.title;
+      button.addEventListener("click", () => scrollToTimelineEvent(action.eventId));
+      els.toolButtonsContainer.appendChild(button);
+    });
+  }
+
   function setStyleMode(index) {
     state.currentStyleMode = index;
     const maxX = els.styleSwitch.clientWidth - els.styleHandle.clientWidth - 8;
@@ -24,6 +63,7 @@ export function createUI(els, state) {
     state.timelineMode = true;
     setModeWord("Timeline", false);
     document.body.classList.add("timeline-mode");
+    swapSidebarContent(renderTimelineSidebarButtons);
     setTimeout(() => setModeWord("Timeline", true), 120);
   }
 
@@ -31,6 +71,7 @@ export function createUI(els, state) {
     state.timelineMode = false;
     setModeWord("Map", true);
     document.body.classList.remove("timeline-mode");
+    swapSidebarContent(renderMapSidebarButtons);
     setTimeout(() => setModeWord("", false), 180);
   }
 
@@ -77,12 +118,22 @@ export function createUI(els, state) {
       text.className = "event-text";
       text.textContent = event.description || "";
 
-      card.append(year, title, text);
+      card.dataset.eventId = event.id || "";
+
+      const dot = document.createElement("div");
+      dot.className = "event-dot";
+
+      const dotDate = document.createElement("div");
+      dotDate.className = "event-timeline-date";
+      dotDate.textContent = event.year || "";
+
+      card.append(year, title, text, dot, dotDate);
       els.timelineContainer.appendChild(card);
     });
   }
 
   return {
+    setSidebarRenderers,
     setStyleMode,
     togglePanel,
     setModeWord,

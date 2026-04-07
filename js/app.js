@@ -9,6 +9,7 @@ const els = getElements();
 const ui = createUI(els, state);
 const mapModule = createMapModule(els, state, ui);
 const editor = createEditorModule(els, state, ui, mapModule);
+ui.setSidebarRenderers({ mapButtonsRenderer: editor.renderGroups });
 
 function setupTopLevelInteractions() {
   els.panelButton.addEventListener("click", () => ui.togglePanel());
