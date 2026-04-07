@@ -5,6 +5,12 @@ export async function loadData() {
     fetch("data/archive.json"),
   ]);
 
+  [markersResponse, timelineResponse, archiveResponse].forEach((response) => {
+    if (!response.ok) {
+      throw new Error(`Не удалось загрузить ${response.url} (${response.status})`);
+    }
+  });
+
   const [markersJson, timelineJson, archiveJson] = await Promise.all([
     markersResponse.json(),
     timelineResponse.json(),

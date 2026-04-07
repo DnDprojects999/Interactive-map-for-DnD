@@ -2,6 +2,7 @@ export function createUI(els, state) {
   let renderMapSidebarButtons = () => {};
   let activeExpandedCardId = null;
   let archiveScrollObserver = null;
+  const editablePanelFields = [els.panelTitle, els.panelSubtitle, els.panelText, els.fact1, els.fact2, els.fact3];
 
   function setSidebarRenderers({ mapButtonsRenderer }) {
     renderMapSidebarButtons = typeof mapButtonsRenderer === "function" ? mapButtonsRenderer : () => {};
@@ -282,7 +283,7 @@ export function createUI(els, state) {
   }
 
   function setPanelEditable(enabled) {
-    [els.panelTitle, els.panelSubtitle, els.panelText, els.fact1, els.fact2, els.fact3].forEach((el) => {
+    editablePanelFields.forEach((el) => {
       el.contentEditable = String(enabled);
     });
   }
