@@ -1,4 +1,14 @@
-export function createEditorModule(els, state, ui, mapModule) {
+export function createEditorModule(els, state, ui, mapModule, changesManager) {
+  function isEditorAccessGranted() {
+    const queryHasEditor = new URLSearchParams(window.location.search).get("editor") === "1";
+    const localFlagEnabled = window.localStorage.getItem("serkonia:editor-access") === "granted";
+    return queryHasEditor || localFlagEnabled;
+  }
+
+  /**
+   * Подсвечивает кнопку слоя, выбранного как "цель редактирования".
+   * В обычном режиме (не edit-mode) кнопки работают как фильтры видимости.
+   */
   function refreshGroupButtonsSelection() {
     const buttons = els.toolButtonsContainer.querySelectorAll(".tool-btn");
     buttons.forEach((button) => {
@@ -51,6 +61,7 @@ export function createEditorModule(els, state, ui, mapModule) {
     markerEl.addEventListener("click", (event) => {
       if (state.editMode && event.altKey) {
         state.markersData = state.markersData.filter((m) => m !== marker);
+        if (marker.id) changesManager.remove("marker", marker.id);
         renderMarkers();
         els.panelTitle.textContent = "Метка удалена";
         els.panelSubtitle.textContent = "Alt + клик удаляет метку";
@@ -65,6 +76,8 @@ export function createEditorModule(els, state, ui, mapModule) {
       event.stopPropagation();
       markerEl.setPointerCapture(event.pointerId);
 
+      // Во время drag сразу меняем и DOM-координаты, и данные модели,
+      // чтобы экспорт JSON отражал актуальное положение без отдельной синхронизации.
       const dragMove = (moveEvent) => {
         const { x, y } = mapModule.getMapPercentFromClient(moveEvent.clientX, moveEvent.clientY);
         marker.x = x;
@@ -74,6 +87,7 @@ export function createEditorModule(els, state, ui, mapModule) {
       };
 
       const dragEnd = () => {
+        if (marker.id) changesManager.upsert("marker", marker.id, marker);
         markerEl.removeEventListener("pointermove", dragMove);
         markerEl.removeEventListener("pointerup", dragEnd);
         markerEl.removeEventListener("pointercancel", dragEnd);
@@ -113,22 +127,13 @@ export function createEditorModule(els, state, ui, mapModule) {
     }
   }
 
-  function exportMarkersJson() {
-    const payload = {
-      groups: state.groupsData,
-      markers: state.markersData,
-    };
-
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "markers.json";
-    a.click();
-    URL.revokeObjectURL(url);
+  function exportWorldChangesJson() {
+    // Экспортируем единый overlay-файл изменений для всех доменов редактора.
+    changesManager.download("world-changes.json");
   }
 
   function setupEditorInteractions() {
+    // Создание новой метки доступно только в edit-mode и только по свободному месту карты.
     els.mapStage.addEventListener("click", (event) => {
       if (!state.editMode) return;
       if (event.target.classList.contains("marker")) return;
@@ -146,13 +151,17 @@ export function createEditorModule(els, state, ui, mapModule) {
       };
 
       state.markersData.push(marker);
+      changesManager.upsert("marker", marker.id, marker);
       renderMarkers();
       ui.updatePanelFromMarker(marker);
     });
 
-    els.exportDataButton.addEventListener("click", exportMarkersJson);
+    els.exportDataButton.addEventListener("click", exportWorldChangesJson);
 
     document.addEventListener("keydown", (event) => {
+      // "Скрытая" функция редактора: горячая клавиша работает только при явном editor-access.
+      // Доступ можно дать через ?editor=1 или локальный флаг serkonia:editor-access=granted.
+      if (!isEditorAccessGranted()) return;
       if (event.ctrlKey && event.shiftKey && event.code === "Backquote") {
         event.preventDefault();
         toggleEditMode();

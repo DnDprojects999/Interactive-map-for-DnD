@@ -1,5 +1,6 @@
 export function createUI(els, state) {
   let renderMapSidebarButtons = () => {};
+  let recordChange = () => {};
   let activeExpandedCardId = null;
   let archiveScrollObserver = null;
   const editablePanelFields = [els.panelTitle, els.panelSubtitle, els.panelText, els.fact1, els.fact2, els.fact3];
@@ -8,10 +9,14 @@ export function createUI(els, state) {
     renderMapSidebarButtons = typeof mapButtonsRenderer === "function" ? mapButtonsRenderer : () => {};
   }
 
+  function setChangeRecorder(recorder) {
+    recordChange = typeof recorder === "function" ? recorder : () => {};
+  }
+
   function swapSidebarContent(renderer) {
     els.toolButtonsContainer.classList.remove("sidebar-fade");
     renderer();
-    // force reflow for repeated animation trigger
+    // Принудительный reflow нужен, чтобы CSS-анимация reliably перезапускалась при каждой смене контента.
     void els.toolButtonsContainer.offsetWidth;
     els.toolButtonsContainer.classList.add("sidebar-fade");
   }
@@ -136,6 +141,7 @@ export function createUI(els, state) {
     const sections = els.archiveGroupsContainer.querySelectorAll(".archive-group");
     if (!sections.length) return;
 
+    // Наблюдатель синхронизирует активную кнопку в sidebar с наиболее видимой секцией архива.
     archiveScrollObserver = new IntersectionObserver((entries) => {
       const visible = entries
         .filter((entry) => entry.isIntersecting)
@@ -198,6 +204,8 @@ export function createUI(els, state) {
   }
 
   function collapseExpandedCards() {
+    // Централизованный "reset" состояния: важно вызывать перед переключением режима,
+    // чтобы не оставлять наложенные expanded-карточки в DOM.
     els.archiveGroupsContainer.querySelectorAll(".archive-expanded").forEach((expanded) => expanded.remove());
     els.archiveGroupsContainer.querySelectorAll(".archive-card.expanded").forEach((card) => card.classList.remove("expanded"));
     els.archiveGroupsContainer.querySelectorAll(".archive-group.has-expanded").forEach((section) => section.classList.remove("has-expanded"));
@@ -301,10 +309,12 @@ export function createUI(els, state) {
 
   function savePanelToCurrentMarker() {
     if (!state.editMode || !state.currentMarker) return;
+    // Панель редактирует текущий объект напрямую — модель и UI остаются консистентны без промежуточного буфера.
     state.currentMarker.title = els.panelTitle.textContent.trim();
     state.currentMarker.type = els.panelSubtitle.textContent.trim();
     state.currentMarker.description = els.panelText.textContent.trim();
     state.currentMarker.facts = [els.fact1.textContent.trim(), els.fact2.textContent.trim(), els.fact3.textContent.trim()];
+    if (state.currentMarker.id) recordChange("marker", state.currentMarker.id, state.currentMarker);
   }
 
   function renderTimeline() {
@@ -345,6 +355,7 @@ export function createUI(els, state) {
 
   return {
     setSidebarRenderers,
+    setChangeRecorder,
     setPalette,
     togglePalettePopover,
     togglePanel,

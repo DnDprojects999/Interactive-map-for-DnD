@@ -13,6 +13,8 @@ export function createMapModule(els, state, ui) {
       const mouseX = event.clientX - rect.left;
       const mouseY = event.clientY - rect.top;
 
+      // "World" координаты нужны, чтобы масштабирование происходило относительно курсора,
+      // а не геометрического центра контейнера.
       const worldX = (mouseX - state.mapOffsetX) / state.mapScale;
       const worldY = (mouseY - state.mapOffsetY) / state.mapScale;
 
@@ -63,6 +65,7 @@ export function createMapModule(els, state, ui) {
   }
 
   function getMapPercentFromClient(clientX, clientY) {
+    // Метки сохраняются в процентах: это делает их устойчивыми к адаптивной вёрстке и разным разрешениям.
     const rect = els.mapStage.getBoundingClientRect();
     const x = clamp(((clientX - rect.left - state.mapOffsetX) / (rect.width * state.mapScale)) * 100, 0, 100);
     const y = clamp(((clientY - rect.top - state.mapOffsetY) / (rect.height * state.mapScale)) * 100, 0, 100);

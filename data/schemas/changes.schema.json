@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://serkonia.local/schemas/changes.schema.json",
+  "type": "object",
+  "required": ["meta", "changes"],
+  "properties": {
+    "meta": {
+      "type": "object",
+      "required": ["schemaVersion", "baseVersion"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "baseVersion": { "type": "string" },
+        "generatedAt": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "changes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["entity", "op", "id"],
+        "properties": {
+          "entity": { "enum": ["marker", "timelineEvent", "archiveGroup", "archiveItem"] },
+          "op": { "enum": ["upsert", "remove"] },
+          "id": { "type": "string", "minLength": 1 },
+          "groupId": { "type": "string" },
+          "value": {}
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": false
+}

@@ -4,14 +4,46 @@ import { loadData } from "./modules/data.js";
 import { createUI } from "./modules/ui.js";
 import { createMapModule } from "./modules/map.js";
 import { createEditorModule } from "./modules/editor.js";
+import { createChangesManager } from "./modules/changes.js";
+
+function assertModuleApi(moduleName, moduleObject, methods) {
+  methods.forEach((methodName) => {
+    if (typeof moduleObject?.[methodName] !== "function") {
+      throw new Error(`${moduleName} init error: missing method "${methodName}".`);
+    }
+  });
+}
 
 const els = getElements();
 const ui = createUI(els, state);
 const mapModule = createMapModule(els, state, ui);
-const editor = createEditorModule(els, state, ui, mapModule);
+const changesManager = createChangesManager();
+const editor = createEditorModule(els, state, ui, mapModule, changesManager);
+assertModuleApi("ui", ui, [
+  "setSidebarRenderers",
+  "setChangeRecorder",
+  "setPalette",
+  "togglePalettePopover",
+  "setPanelEditable",
+  "setModeWord",
+  "togglePanel",
+  "renderTimeline",
+  "openTimelineMode",
+  "openArchiveMode",
+  "openMapMode",
+  "savePanelToCurrentMarker",
+  "updatePanelFromMarker",
+]);
+assertModuleApi("mapModule", mapModule, ["applyMapTransform", "setupMapNavigation", "getMapPercentFromClient"]);
+assertModuleApi("editor", editor, ["renderGroups", "renderMarkers", "setupEditorInteractions"]);
 ui.setSidebarRenderers({ mapButtonsRenderer: editor.renderGroups });
+ui.setChangeRecorder((entity, id, value) => changesManager.upsert(entity, id, value));
 const panelEditableFields = [els.panelTitle, els.panelSubtitle, els.panelText, els.fact1, els.fact2, els.fact3];
 
+/**
+ * Регистрирует пользовательские взаимодействия верхнего уровня (без привязки к конкретному режиму карты).
+ * Здесь живут только "сквозные" обработчики: панель, палитра, переключение режимов и inline-редактирование панели.
+ */
 function setupTopLevelInteractions() {
   els.panelHandle.addEventListener("click", () => ui.togglePanel());
   els.closePanel.addEventListener("click", () => ui.togglePanel(false));
@@ -63,12 +95,19 @@ function setupTopLevelInteractions() {
 
 async function init() {
   try {
+    // Централизованная загрузка всех JSON-источников до первого рендера исключает
+    // частичные состояния UI и "мигание" при асинхронной подгрузке блоков по отдельности.
     const data = await loadData();
     state.groupsData = data.groupsData;
     state.markersData = data.markersData;
     state.eventsData = data.eventsData;
     state.archiveData = data.archiveData;
     state.editorGroupId = state.groupsData[0]?.id || null;
+
+    changesManager.setBaseVersion(data.loadedChanges?.meta?.baseVersion || "base-local-json");
+    if (data.loadedChanges) {
+      changesManager.loadPayload(data.loadedChanges);
+    }
 
     editor.renderGroups();
     editor.renderMarkers();

@@ -1,5 +1,5 @@
 export function getElements() {
-  return {
+  const elements = {
     topbar: document.getElementById("topbar"),
     modeWord: document.getElementById("modeWord"),
     timelineOpenButton: document.getElementById("timelineOpenButton"),
@@ -29,4 +29,14 @@ export function getElements() {
     archiveGroupsContainer: document.getElementById("archiveGroupsContainer"),
     exportDataButton: document.getElementById("exportDataButton"),
   };
+
+  const missingEntries = Object.entries(elements)
+    .filter(([, element]) => !element)
+    .map(([name]) => name);
+
+  if (missingEntries.length > 0) {
+    throw new Error(`DOM init error: missing required elements (${missingEntries.join(", ")}).`);
+  }
+
+  return elements;
 }
