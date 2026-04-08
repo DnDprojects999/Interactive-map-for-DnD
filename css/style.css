@@ -135,6 +135,10 @@ button { font: inherit; }
   user-select: none;
   white-space: nowrap;
 }
+.region-label.text-editable {
+  cursor: text;
+  user-select: text;
+}
 .marker { position: absolute; width: 18px; height: 18px; border-radius: 999px; border: 2px solid rgba(255,255,255,.82); transform: translate(-50%, -50%); cursor: pointer; }
 .marker.hidden { display: none; }
 .marker-name {

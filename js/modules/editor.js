@@ -10,6 +10,13 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
     });
   }
 
+  function refreshDrawLayerButtonsSelection() {
+    const buttons = els.toolButtonsContainer.querySelectorAll(".tool-btn[data-draw-layer-id]");
+    buttons.forEach((button) => {
+      button.classList.toggle("editor-target", state.editMode && button.dataset.drawLayerId === state.activeDrawLayerId);
+    });
+  }
+
   function renderGroups() {
     els.toolButtonsContainer.innerHTML = "";
 
@@ -61,6 +68,7 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
     state.drawLayersData.forEach((layer, index) => {
       const layerButton = document.createElement("button");
       layerButton.className = `tool-btn ${layer.visible !== false ? "active" : ""}`;
+      layerButton.dataset.drawLayerId = layer.id;
       layerButton.title = layer.name || `Слой ${index + 1}`;
       layerButton.textContent = "◻";
       layerButton.addEventListener("click", () => {
@@ -91,6 +99,7 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
     }
 
     refreshGroupButtonsSelection();
+    refreshDrawLayerButtonsSelection();
   }
 
   function createMarkerElement(marker, groupsById) {
@@ -220,6 +229,7 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
       selectButton.textContent = state.activeDrawLayerId === layer.id ? "✓" : "●";
       selectButton.addEventListener("click", () => {
         state.activeDrawLayerId = layer.id;
+        renderGroups();
         renderDrawLayerPanel();
       });
 
@@ -259,6 +269,7 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
         state.drawLayersData = state.drawLayersData.filter((entry) => entry.id !== layer.id);
         changesManager.remove("drawLayer", layer.id);
         state.activeDrawLayerId = state.drawLayersData[0]?.id || null;
+        renderGroups();
         renderDrawLayers();
         renderDrawLayerPanel();
       });
@@ -285,6 +296,7 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
       el.style.transform = `translate(-50%, -50%) rotate(${label.rotation || 0}deg)`;
       el.textContent = label.text || "Новая подпись";
       el.contentEditable = String(state.editMode && state.regionTextMode);
+      el.classList.toggle("text-editable", state.editMode && state.regionTextMode);
 
       el.addEventListener("input", () => {
         label.text = el.textContent.trim();
@@ -315,8 +327,21 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
     };
     state.regionLabelsData.push(label);
     state.currentRegionLabel = label;
+    state.regionTextMode = true;
     changesManager.upsert("regionLabel", label.id, label);
     renderRegionLabels();
+    requestAnimationFrame(() => {
+      const labelElement = els.regionLabelsContainer.querySelector(`[data-label-id="${label.id}"]`);
+      if (!labelElement) return;
+      labelElement.focus();
+      const range = document.createRange();
+      range.selectNodeContents(labelElement);
+      range.collapse(false);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      ui.openMapTextToolbar(label, labelElement.getBoundingClientRect());
+    });
   }
 
   function renderMarkers() {
@@ -471,6 +496,10 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
       const label = state.regionLabelsData.find((entry) => entry.id === labelId);
       if (!label) return;
       state.currentRegionLabel = label;
+      if (state.regionTextMode) {
+        ui.openMapTextToolbar(label, labelElement.getBoundingClientRect());
+        return;
+      }
 
       const onMove = (moveEvent) => {
         const { x, y } = mapModule.getMapPercentFromClient(moveEvent.clientX, moveEvent.clientY);
