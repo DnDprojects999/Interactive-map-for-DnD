@@ -394,7 +394,8 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
 
     if (state.editMode) {
       els.panelSubtitle.textContent = "Режим редактирования включён";
-      els.panelText.textContent = "Клик по карте: новая метка · Alt+клик по метке: удалить · перетаскивание метки: изменить позицию.";
+      els.panelText.textContent =
+        "Клик по карте: новая метка · Alt+клик по метке: удалить · подписи: зажми 1 сек в текстовом режиме для перетаскивания.";
     }
   }
 
@@ -513,27 +514,46 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
       const label = state.regionLabelsData.find((entry) => entry.id === labelId);
       if (!label) return;
       state.currentRegionLabel = label;
-      if (state.regionTextMode) {
-        ui.openMapTextToolbar(label, labelElement.getBoundingClientRect());
-        return;
-      }
+
+      const longPressDragDelayMs = 1000;
+      let dragEnabled = !state.regionTextMode;
+      let longPressTimerId = null;
 
       const onMove = (moveEvent) => {
+        if (!dragEnabled) return;
         const { x, y } = mapModule.getMapPercentFromClient(moveEvent.clientX, moveEvent.clientY);
         label.x = x;
         label.y = y;
         labelElement.style.left = `${x}%`;
         labelElement.style.top = `${y}%`;
       };
-      const onEnd = () => {
-        changesManager.upsert("regionLabel", label.id, label);
+
+      const releaseHandlers = () => {
+        if (longPressTimerId !== null) {
+          clearTimeout(longPressTimerId);
+          longPressTimerId = null;
+        }
         labelElement.removeEventListener("pointermove", onMove);
         labelElement.removeEventListener("pointerup", onEnd);
         labelElement.removeEventListener("pointercancel", onEnd);
       };
+
+      const onEnd = () => {
+        const hasDragged = dragEnabled;
+        releaseHandlers();
+        if (hasDragged) changesManager.upsert("regionLabel", label.id, label);
+      };
+
       labelElement.addEventListener("pointermove", onMove);
       labelElement.addEventListener("pointerup", onEnd);
       labelElement.addEventListener("pointercancel", onEnd);
+
+      if (!state.regionTextMode) return;
+
+      ui.openMapTextToolbar(label, labelElement.getBoundingClientRect());
+      longPressTimerId = window.setTimeout(() => {
+        dragEnabled = true;
+      }, longPressDragDelayMs);
     });
 
     els.exportDataButton.addEventListener("click", exportWorldChangesJson);
