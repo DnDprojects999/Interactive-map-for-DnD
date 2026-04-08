@@ -601,7 +601,7 @@ body.archive-mode .archive-drawer {
   opacity: 1;
   pointer-events: auto;
 }
-body.archive-mode #archiveOpenButton { opacity: 0; pointer-events: none; }
+body.archive-mode #archiveOpenButton { display: none; }
 body.archive-mode .info-panel { opacity: 0; pointer-events: none; }
 
 .sidebar-fade {
