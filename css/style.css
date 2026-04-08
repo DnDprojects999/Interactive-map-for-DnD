@@ -35,7 +35,7 @@ button { font: inherit; }
 .mode-word { font-size: 28px; opacity: 0; transform: translateY(-6px); transition: opacity .22s ease, transform .22s ease; }
 .mode-word.show { opacity: 1; transform: translateY(0); }
 
-.topbar-center { display: flex; justify-content: center; gap: 10px; }
+.topbar-center { display: flex; justify-content: center; gap: 14px; }
 .topbar-right { display: flex; justify-content: flex-end; align-items: center; gap: 10px; }
 
 .mode-link {
