@@ -1,10 +1,4 @@
 export function createEditorModule(els, state, ui, mapModule, changesManager) {
-  function isEditorAccessGranted() {
-    const queryHasEditor = new URLSearchParams(window.location.search).get("editor") === "1";
-    const localFlagEnabled = window.localStorage.getItem("serkonia:editor-access") === "granted";
-    return queryHasEditor || localFlagEnabled;
-  }
-
   /**
    * Подсвечивает кнопку слоя, выбранного как "цель редактирования".
    * В обычном режиме (не edit-mode) кнопки работают как фильтры видимости.
@@ -453,9 +447,6 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
     els.exportDataButton.addEventListener("click", exportWorldChangesJson);
 
     document.addEventListener("keydown", (event) => {
-      // "Скрытая" функция редактора: горячая клавиша работает только при явном editor-access.
-      // Доступ можно дать через ?editor=1 или локальный флаг serkonia:editor-access=granted.
-      if (!isEditorAccessGranted()) return;
       if (event.ctrlKey && event.shiftKey && event.code === "Backquote") {
         event.preventDefault();
         toggleEditMode();

@@ -295,8 +295,19 @@ export function createUI(els, state) {
     els.mapTextItalicButton.classList.toggle("active", Boolean(label.italic));
 
     els.mapTextToolbar.hidden = false;
-    els.mapTextToolbar.style.top = `${Math.max(84, (rect?.top || 180) - 56)}px`;
-    els.mapTextToolbar.style.left = `${Math.max(100, rect?.left || 120)}px`;
+
+    const fallbackTop = 180;
+    const fallbackLeft = 120;
+    const margin = 24;
+    const desiredTop = (rect?.top || fallbackTop) - 68;
+    const desiredLeft = rect?.left || fallbackLeft;
+    const toolbarWidth = els.mapTextToolbar.offsetWidth || 340;
+    const toolbarHeight = els.mapTextToolbar.offsetHeight || 44;
+    const maxTop = Math.max(margin, window.innerHeight - toolbarHeight - margin);
+    const maxLeft = Math.max(margin, window.innerWidth - toolbarWidth - margin);
+
+    els.mapTextToolbar.style.top = `${Math.min(maxTop, Math.max(margin, desiredTop))}px`;
+    els.mapTextToolbar.style.left = `${Math.min(maxLeft, Math.max(margin, desiredLeft))}px`;
   }
 
   function closeMapTextToolbar() {

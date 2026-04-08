@@ -543,6 +543,7 @@ body.edit-mode .archive-expanded-text {
 .map-text-toolbar button.active {
   background: rgba(255,255,255,.2);
 }
+.map-text-toolbar[hidden] { display: none !important; }
 
 .draw-layer-panel {
   position: absolute;
