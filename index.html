@@ -30,14 +30,14 @@
   <div class="workspace">
     <aside class="sidebar">
       <div class="sidebar-title" id="sidebarTitle">Слои</div>
-      <label class="sidebar-palette" for="paletteSelect" title="Палитра карты">
-        <span class="sidebar-palette-label">🎨</span>
-        <select class="sidebar-palette-select" id="paletteSelect">
-          <option value="ember">Ember</option>
-          <option value="night">Night</option>
-          <option value="frost">Frost</option>
-        </select>
-      </label>
+      <div class="palette-widget" id="paletteWidget">
+        <button class="palette-toggle" id="paletteToggle" type="button" title="Сменить палитру">🎨</button>
+        <div class="palette-popover" id="palettePopover" hidden>
+          <button class="palette-option" type="button" data-palette-value="ember">Ember</button>
+          <button class="palette-option" type="button" data-palette-value="night">Night</button>
+          <button class="palette-option" type="button" data-palette-value="frost">Frost</button>
+        </div>
+      </div>
       <div id="toolButtonsContainer"></div>
       <button class="archive-open-btn" id="archiveOpenButton" title="Открыть архив">📖</button>
     </aside>

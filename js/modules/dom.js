@@ -7,7 +7,9 @@ export function getElements() {
     archiveOpenButton: document.getElementById("archiveOpenButton"),
     sidebarTitle: document.getElementById("sidebarTitle"),
 
-    paletteSelect: document.getElementById("paletteSelect"),
+    paletteWidget: document.getElementById("paletteWidget"),
+    paletteToggle: document.getElementById("paletteToggle"),
+    palettePopover: document.getElementById("palettePopover"),
     mapStage: document.getElementById("mapStage"),
     mapTransform: document.getElementById("mapTransform"),
     content: document.getElementById("content"),

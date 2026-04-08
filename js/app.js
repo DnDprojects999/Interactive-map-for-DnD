@@ -16,7 +16,24 @@ function setupTopLevelInteractions() {
   els.panelHandle.addEventListener("click", () => ui.togglePanel());
   els.closePanel.addEventListener("click", () => ui.togglePanel(false));
 
-  els.paletteSelect.addEventListener("change", () => ui.setPalette(els.paletteSelect.value));
+  els.paletteToggle.addEventListener("click", (event) => {
+    event.stopPropagation();
+    ui.togglePalettePopover();
+  });
+
+  els.palettePopover.addEventListener("click", (event) => {
+    const button = event.target.closest(".palette-option");
+    if (!button) return;
+    const palette = button.dataset.paletteValue;
+    if (!palette) return;
+    ui.setPalette(palette);
+    ui.togglePalettePopover(false);
+  });
+
+  document.addEventListener("click", (event) => {
+    if (els.paletteWidget.contains(event.target)) return;
+    ui.togglePalettePopover(false);
+  });
 
   els.timelineOpenButton.addEventListener("click", () => {
     if (state.archiveMode) {
@@ -69,7 +86,7 @@ async function init() {
 }
 
 ui.setPalette(state.currentPalette);
-els.paletteSelect.value = state.currentPalette;
+ui.togglePalettePopover(false);
 ui.setPanelEditable(false);
 ui.setModeWord("Map", true);
 ui.togglePanel(true);

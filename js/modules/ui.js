@@ -85,6 +85,19 @@ export function createUI(els, state) {
     document.body.classList.remove("palette-night", "palette-frost");
     if (palette === "night") document.body.classList.add("palette-night");
     if (palette === "frost") document.body.classList.add("palette-frost");
+
+    const paletteOptions = els.palettePopover?.querySelectorAll(".palette-option") || [];
+    paletteOptions.forEach((option) => {
+      option.classList.toggle("active", option.dataset.paletteValue === palette);
+    });
+  }
+
+  function togglePalettePopover(force) {
+    if (!els.palettePopover || !els.paletteToggle) return;
+    const isOpen = !els.palettePopover.hidden;
+    const shouldOpen = typeof force === "boolean" ? force : !isOpen;
+    els.palettePopover.hidden = !shouldOpen;
+    els.paletteToggle.classList.toggle("active", shouldOpen);
   }
 
   function togglePanel(force) {
@@ -333,6 +346,7 @@ export function createUI(els, state) {
   return {
     setSidebarRenderers,
     setPalette,
+    togglePalettePopover,
     togglePanel,
     setModeWord,
     openTimelineMode,
