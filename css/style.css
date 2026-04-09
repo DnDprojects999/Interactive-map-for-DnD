@@ -164,6 +164,7 @@ button { font: inherit; }
   position: absolute;
   inset: 0;
   z-index: 5;
+  pointer-events: auto;
 }
 .region-label {
   position: absolute;
@@ -193,7 +194,8 @@ button { font: inherit; }
   position: absolute;
   top: -22px;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translateX(-50%) scale(var(--overlay-scale, 1));
+  transform-origin: center bottom;
   font-size: 12px;
   color: #fff;
   text-shadow: 0 2px 6px rgba(0,0,0,.75);

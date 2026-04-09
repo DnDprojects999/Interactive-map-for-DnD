@@ -310,7 +310,7 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
       el.style.fontWeight = label.bold ? "700" : "500";
       el.style.fontStyle = label.italic ? "italic" : "normal";
       el.style.color = label.color || "#dbeafe";
-      el.style.transform = `translate(-50%, -50%) rotate(${label.rotation || 0}deg) scale(var(--overlay-scale-inverse, 1))`;
+      el.style.transform = `translate(-50%, -50%) rotate(${label.rotation || 0}deg)`;
       el.textContent = label.text || "Новая подпись";
       const textEditable = state.editMode && state.regionTextMode && !state.regionTextMoveMode;
       el.contentEditable = String(textEditable);
@@ -325,6 +325,21 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
         event.stopPropagation();
         state.currentRegionLabel = label;
         ui.openMapTextToolbar(label, el.getBoundingClientRect());
+      });
+
+      el.addEventListener("dblclick", (event) => {
+        if (!state.editMode) return;
+        event.stopPropagation();
+        state.currentRegionLabel = label;
+        state.regionTextMode = true;
+        state.regionTextMoveMode = false;
+        renderRegionLabels();
+        requestAnimationFrame(() => {
+          const refreshed = els.regionLabelsContainer.querySelector(`[data-label-id="${label.id}"]`);
+          if (!refreshed) return;
+          refreshed.focus();
+          ui.openMapTextToolbar(label, refreshed.getBoundingClientRect());
+        });
       });
       els.regionLabelsContainer.appendChild(el);
     });
@@ -565,7 +580,18 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
       labelElement.addEventListener("pointerup", onEnd);
       labelElement.addEventListener("pointercancel", onEnd);
 
-      if (state.regionTextMode) ui.openMapTextToolbar(label, labelElement.getBoundingClientRect());
+      const openToolbarIfNeeded = () => {
+        state.currentRegionLabel = label;
+        ui.openMapTextToolbar(label, labelElement.getBoundingClientRect());
+      };
+
+      if (!dragEnabled) openToolbarIfNeeded();
+
+      if (dragEnabled) {
+        labelElement.addEventListener("pointerup", () => {
+          if (!hasDragged) openToolbarIfNeeded();
+        }, { once: true });
+      }
     });
 
     els.exportDataButton.addEventListener("click", exportWorldChangesJson);

@@ -25,6 +25,7 @@ export function createMapModule(els, state, ui) {
     constrainMapOffsetToImageBounds();
     els.mapTransform.style.transform = `translate(${state.mapOffsetX}px, ${state.mapOffsetY}px) scale(${state.mapScale})`;
     els.mapStage.style.setProperty("--overlay-scale-inverse", (1 / state.mapScale).toFixed(4));
+    els.mapStage.style.setProperty("--overlay-scale", state.mapScale.toFixed(4));
     document.body.classList.toggle("zoom-near", state.mapScale >= 1.8);
     els.mapScaleIndicator.textContent = `x${state.mapScale.toFixed(2)}`;
   }
