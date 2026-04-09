@@ -36,7 +36,7 @@ button { font: inherit; }
 .mode-word.show { opacity: 1; transform: translateY(0); }
 
 .topbar-center { display: flex; justify-content: center; gap: 14px; }
-.topbar-right { display: flex; justify-content: flex-end; align-items: center; gap: 10px; }
+.topbar-right { display: flex; justify-content: flex-end; align-items: center; gap: 10px; min-width: 0; }
 
 .mode-link {
   border: 1px solid rgba(255,255,255,.22); background: rgba(255,255,255,.08); color: #fff;
@@ -46,6 +46,32 @@ button { font: inherit; }
 .mode-link:hover { background: rgba(255,255,255,.14); transform: translateY(-1px); }
 
 .btn { border: 1px solid var(--line-strong); background: rgba(255,255,255,.06); color: var(--text); border-radius: 14px; padding: 10px 14px; cursor: pointer; }
+
+
+.map-view-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: rgba(255,255,255,.05);
+}
+.map-view-btn {
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.map-view-btn.active {
+  color: #fff;
+  background: rgba(255,255,255,.18);
+}
 
 .slide-switch { position: relative; width: 220px; height: 44px; border-radius: 999px; background: rgba(255,255,255,.06); border: 1px solid var(--line-strong); overflow: hidden; user-select: none; cursor: pointer; }
 .switch-labels { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr 1fr; align-items: center; text-align: center; font-size: 14px; color: var(--muted); z-index: 1; pointer-events: none; }
@@ -208,6 +234,26 @@ button { font: inherit; }
 }
 body.zoom-near .marker-name { opacity: 1; }
 body.zoom-near .region-label { opacity: 0; }
+
+
+body.map-view-author .map-grid,
+body.map-view-author .map-fog {
+  opacity: 0;
+}
+
+body.map-view-vector .map-fog {
+  display: none;
+}
+body.map-view-vector .map-photo {
+  filter: grayscale(1) contrast(1.08) brightness(.92);
+}
+
+body.map-view-vector-colored .map-fog {
+  display: block;
+}
+body.map-view-vector-colored .map-photo {
+  filter: none;
+}
 
 body.palette-night {
   --map-fill: linear-gradient(180deg, rgba(13, 22, 50, .8), rgba(10, 14, 30, .84));

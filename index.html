@@ -24,6 +24,11 @@
     </div>
 
     <div class="topbar-right">
+      <div class="map-view-switcher" id="mapViewSwitcher" aria-label="Режим отображения карты">
+        <button class="map-view-btn" type="button" data-map-view="author">Авторский</button>
+        <button class="map-view-btn" type="button" data-map-view="vector">Вектор</button>
+        <button class="map-view-btn" type="button" data-map-view="vector-colored">Вектор + цвет</button>
+      </div>
       <button class="btn" id="uploadMapTextureButton" hidden>Заливка карты</button>
       <input id="mapTextureInput" type="file" accept="image/*" hidden />
       <button class="btn" id="exportDataButton" hidden>Экспорт JSON</button>

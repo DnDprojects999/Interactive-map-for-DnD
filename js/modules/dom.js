@@ -8,6 +8,7 @@ export function getElements() {
     sidebarTitle: document.getElementById("sidebarTitle"),
 
     paletteWidget: document.getElementById("paletteWidget"),
+    mapViewSwitcher: document.getElementById("mapViewSwitcher"),
     paletteToggle: document.getElementById("paletteToggle"),
     palettePopover: document.getElementById("palettePopover"),
     addPaletteButton: document.getElementById("addPaletteButton"),
