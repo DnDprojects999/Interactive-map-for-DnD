@@ -1,18 +1,49 @@
 export function createEditorModule(els, state, ui, mapModule, changesManager) {
-  let activeMapTextureObjectUrl = null;
+  const mapTextureObjectUrls = {
+    author: null,
+    interactive: null,
+  };
+
+  if (!state.mapTextureByType || typeof state.mapTextureByType !== "object") {
+    state.mapTextureByType = { author: "", interactive: "" };
+  }
+
+  function resolveTextureKeyByMode(mode = state.mapViewMode) {
+    return mode === "author" ? "author" : "interactive";
+  }
 
   function applyMapTexture(source) {
     els.mapPhotoLayer.style.setProperty("--map-photo-image", source ? `url("${source}")` : "none");
   }
 
+  function updateMapTextureButtonLabel() {
+    const textureKey = resolveTextureKeyByMode();
+    els.uploadMapTextureButton.textContent = textureKey === "author"
+      ? "Загрузить авторскую карту"
+      : "Загрузить интерактивную карту";
+  }
+
+  function applyTextureForCurrentMapMode() {
+    const textureKey = resolveTextureKeyByMode();
+    applyMapTexture(state.mapTextureByType?.[textureKey] || "");
+  }
+
   function handleMapTextureSelection(file) {
     if (!file) return;
     if (!file.type.startsWith("image/")) return;
-    if (activeMapTextureObjectUrl) URL.revokeObjectURL(activeMapTextureObjectUrl);
-    activeMapTextureObjectUrl = URL.createObjectURL(file);
-    applyMapTexture(activeMapTextureObjectUrl);
-    els.panelSubtitle.textContent = `Фоновая карта обновлена: ${file.name}`;
-    els.panelText.textContent = "Фото применено как базовый слой карты. Сетка и блики остаются сверху полупрозрачно.";
+
+    const textureKey = resolveTextureKeyByMode();
+    if (mapTextureObjectUrls[textureKey]) URL.revokeObjectURL(mapTextureObjectUrls[textureKey]);
+
+    mapTextureObjectUrls[textureKey] = URL.createObjectURL(file);
+    state.mapTextureByType[textureKey] = mapTextureObjectUrls[textureKey];
+    applyTextureForCurrentMapMode();
+
+    const mapModeLabel = textureKey === "author" ? "авторского" : "интерактивного";
+    els.panelSubtitle.textContent = `Фон ${mapModeLabel} режима обновлён: ${file.name}`;
+    els.panelText.textContent = textureKey === "author"
+      ? "Изображение сохранено в группу авторских карт и показывается только в авторском режиме."
+      : "Изображение сохранено в группу интерактивных карт и показывается в обоих интерактивных режимах.";
   }
 
   /**
@@ -298,7 +329,7 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
 
   function renderRegionLabels() {
     els.regionLabelsContainer.innerHTML = "";
-    if (!state.regionLabelsVisible) return;
+    if (!state.regionLabelsVisible || state.mapViewMode === "author") return;
     state.regionLabelsData.forEach((label) => {
       const el = document.createElement("div");
       el.className = "region-label";
@@ -399,6 +430,7 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
 
     els.exportDataButton.hidden = !state.editMode;
     els.uploadMapTextureButton.hidden = !state.editMode;
+    updateMapTextureButtonLabel();
     els.deleteMarkerButton.hidden = !state.editMode;
     els.addPaletteButton.hidden = !state.editMode;
     ui.setPanelEditable(state.editMode);
@@ -409,6 +441,7 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
     }
     renderGroups();
     renderDrawLayerPanel();
+    applyTextureForCurrentMapMode();
     refreshGroupButtonsSelection();
 
     if (state.editMode) {
@@ -445,6 +478,8 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
     renderDrawLayers();
     renderRegionLabels();
     renderDrawLayerPanel();
+    applyTextureForCurrentMapMode();
+    updateMapTextureButtonLabel();
     ui.setupMapEditorCallbacks({
       onCreateRegionLabel: () => createRegionLabel(),
       onToggleTextMoveMode: () => {
@@ -469,6 +504,11 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
       onBrushChange: ({ color, size }) => {
         if (color) state.drawBrushColor = color;
         if (typeof size === "number") state.drawBrushSize = size;
+      },
+      onMapViewModeChange: () => {
+        applyTextureForCurrentMapMode();
+        updateMapTextureButtonLabel();
+        renderRegionLabels();
       },
     });
 
@@ -610,7 +650,9 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
     });
 
     window.addEventListener("beforeunload", () => {
-      if (activeMapTextureObjectUrl) URL.revokeObjectURL(activeMapTextureObjectUrl);
+      Object.values(mapTextureObjectUrls).forEach((url) => {
+        if (url) URL.revokeObjectURL(url);
+      });
     });
   }
 

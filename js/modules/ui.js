@@ -9,6 +9,7 @@ export function createUI(els, state) {
     onToggleDrawMode: () => {},
     onTextStyleChange: () => {},
     onBrushChange: () => {},
+    onMapViewModeChange: () => {},
   };
   const mapFonts = ["Cinzel", "Inter", "Georgia", "Times New Roman", "Arial", "Verdana", "Trebuchet MS", "Palatino", "Garamond", "Courier New"];
   const paletteVariableNames = ["--map-fill", "--map-border", "--grid-line", "--fog-a", "--fog-b", "--fog-c"];
@@ -31,6 +32,45 @@ export function createUI(els, state) {
     "archive-expanded-text",
   ];
   let dragArchiveCardMeta = null;
+
+  const mapViewModes = ["author", "vector", "vector-colored"];
+
+  function getArchiveImageVariantKey() {
+    return state.mapViewMode === "author" ? "author" : "interactive";
+  }
+
+  function ensureArchiveImageVariants(item) {
+    if (!item || typeof item !== "object") return;
+    if (!item.imageVariants || typeof item.imageVariants !== "object") item.imageVariants = {};
+  }
+
+  function getArchiveItemImageUrl(item) {
+    const variantKey = getArchiveImageVariantKey();
+    const variantUrl = item?.imageVariants?.[variantKey]?.trim?.() || "";
+    if (variantUrl) return variantUrl;
+    return item?.imageUrl?.trim?.() || "";
+  }
+
+  function setMapDisplayMode(mode, options = {}) {
+    const nextMode = mapViewModes.includes(mode) ? mode : "author";
+    const shouldRenderArchive = options.rerenderArchive !== false;
+    state.mapViewMode = nextMode;
+
+    document.body.classList.toggle("map-view-author", nextMode === "author");
+    document.body.classList.toggle("map-view-vector", nextMode === "vector");
+    document.body.classList.toggle("map-view-vector-colored", nextMode === "vector-colored");
+
+    const modeButtons = els.mapViewSwitcher?.querySelectorAll?.("[data-map-view]") || [];
+    modeButtons.forEach((button) => {
+      button.classList.toggle("active", button.dataset.mapView === nextMode);
+    });
+
+    mapEditorCallbacks.onMapViewModeChange(nextMode);
+
+    if (shouldRenderArchive) {
+      renderArchive();
+    }
+  }
 
   function generateEntityId(prefix) {
     return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -125,7 +165,7 @@ export function createUI(els, state) {
 
   function renderArchiveCardImage(imageNode, item) {
     imageNode.innerHTML = "";
-    const imageUrl = item?.imageUrl?.trim() || "";
+    const imageUrl = getArchiveItemImageUrl(item);
     if (!imageUrl) {
       imageNode.textContent = item?.imageLabel || "Изображение";
       return;
@@ -814,7 +854,9 @@ export function createUI(els, state) {
     const applyArchiveImageFile = async (file, imageNode, group, item) => {
       if (!file || !state.editMode || !file.type?.startsWith("image/")) return;
       try {
-        item.imageUrl = await readFileToDataUrl(file);
+        ensureArchiveImageVariants(item);
+        const variantKey = getArchiveImageVariantKey();
+        item.imageVariants[variantKey] = await readFileToDataUrl(file);
         renderArchiveCardImage(imageNode, item);
         recordChange("archiveItem", item.id, item, { groupId: group.id });
       } catch (error) {
@@ -1009,6 +1051,15 @@ export function createUI(els, state) {
     });
   }
 
+  function setupMapViewSwitcher() {
+    if (!els.mapViewSwitcher) return;
+    els.mapViewSwitcher.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-map-view]");
+      if (!button) return;
+      setMapDisplayMode(button.dataset.mapView);
+    });
+  }
+
   function setupMapTextToolbarInteractions() {
     els.mapTextFontSelect.addEventListener("change", () => {
       mapEditorCallbacks.onTextStyleChange({ fontFamily: els.mapTextFontSelect.value });
@@ -1076,6 +1127,8 @@ export function createUI(els, state) {
     });
   }
 
+  setupMapViewSwitcher();
+  setMapDisplayMode(state.mapViewMode || "author", { rerenderArchive: false });
   setupPanelImageInteractions();
   setupMapTextToolbarInteractions();
   setupDrawBrushPalette();
@@ -1091,6 +1144,7 @@ export function createUI(els, state) {
     togglePalettePopover,
     togglePanel,
     setModeWord,
+    setMapDisplayMode,
     openTimelineMode,
     openArchiveMode,
     openMapMode,

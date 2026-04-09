@@ -24,6 +24,11 @@ export const state = {
   timelineMode: false,
   archiveMode: false,
   activeArchiveGroupId: null,
+  mapViewMode: "author",
+  mapTextureByType: {
+    author: "",
+    interactive: "",
+  },
 
   mapScale: 1,
   mapOffsetX: 0,
