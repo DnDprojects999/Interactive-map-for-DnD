@@ -520,7 +520,8 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
 
     els.regionLabelsContainer.addEventListener("pointerdown", (event) => {
       if (!state.editMode) return;
-      const labelElement = event.target.closest(".region-label");
+      const targetElement = event.target instanceof Element ? event.target : event.target?.parentElement;
+      const labelElement = targetElement?.closest?.(".region-label");
       if (!labelElement) return;
       event.stopPropagation();
       const labelId = labelElement.dataset.labelId;
@@ -529,10 +530,17 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
       state.currentRegionLabel = label;
 
       const dragEnabled = !state.regionTextMode || state.regionTextMoveMode;
+      let hasDragged = false;
+
+      if (dragEnabled) {
+        event.preventDefault();
+        labelElement.setPointerCapture(event.pointerId);
+      }
 
       const onMove = (moveEvent) => {
         if (!dragEnabled) return;
         const { x, y } = mapModule.getMapPercentFromClient(moveEvent.clientX, moveEvent.clientY);
+        hasDragged = true;
         label.x = x;
         label.y = y;
         labelElement.style.left = `${x}%`;
@@ -546,8 +554,10 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
       };
 
       const onEnd = () => {
-        const hasDragged = dragEnabled;
         releaseHandlers();
+        if (dragEnabled && labelElement.hasPointerCapture(event.pointerId)) {
+          labelElement.releasePointerCapture(event.pointerId);
+        }
         if (hasDragged) changesManager.upsert("regionLabel", label.id, label);
       };
 

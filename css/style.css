@@ -507,7 +507,7 @@ body.edit-mode .archive-card-image {
   position: absolute;
   left: 50%;
   transform: translate(-50%, -50%);
-  top: calc(var(--timeline-axis-y) + 24px);
+  top: calc(var(--timeline-axis-y) + 22px);
   width: 12px;
   height: 12px;
   border-radius: 50%;
@@ -519,7 +519,7 @@ body.edit-mode .archive-card-image {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  top: calc(var(--timeline-axis-y) + 44px);
+  top: calc(var(--timeline-axis-y) + 42px);
   font-size: 11px;
   color: var(--muted);
   letter-spacing: .04em;
