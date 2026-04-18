@@ -1,8 +1,60 @@
+import { normalizeTimelineOrderByDate } from "./timelineModel.js";
+import {
+  createTimelineAxisSvg,
+  createTimelineEventItem,
+  createTimelineFutureItem,
+} from "./timelineView.js";
+import { createArchiveController } from "./archive/archiveController.js";
+import {
+  createArchiveSidebarController,
+  getArchiveShortLabel,
+} from "./archive/archiveSidebar.js";
+import { setupInlineEditingInteractions } from "./inlineEditing.js";
+import { createHeroesController } from "./heroes/heroesController.js";
+import { setupHeroInteractions } from "./heroes/heroesInteractions.js";
+import { createEditorActionsController } from "./editorActions.js";
+import { createDataQualityController } from "./dataQuality.js";
+import { createGlobalSearchController } from "./globalSearch.js";
+import { setupPanelImageInteractions } from "./panelImages.js";
+import { createPanelDetailsController } from "./panelDetails.js";
+import { createMapControlsController } from "./mapControls.js";
+import { createMapTextToolbarController } from "./mapTextToolbar.js";
+import { createPaletteController } from "./paletteControls.js";
+import { createSidebarLegendController } from "./sidebarLegend.js";
+import { createTimelineSidebarController } from "./timelineSidebar.js";
+import { createTimelineActsController } from "./ui/timelineActsController.js";
+import { syncTimelineTrackAlignment as syncTimelineAxisTrackAlignment } from "./timelineAxis.js";
+import { createPlayerSidebarController } from "./players/playerSidebar.js";
+import { getLocalizedText, setLocalizedValue } from "./localization.js";
+import {
+  normalizeActiveMapData,
+  replaceActiveMapMarkers,
+} from "./activeMapState.js";
+import { getUiText } from "./uiLocale.js";
+
+const MODE_STATE_KEYS = ["timelineMode", "archiveMode", "homebrewMode", "heroesMode", "activeMapMode"];
+const BODY_MODE_CLASSES = ["timeline-mode", "archive-mode", "homebrew-mode", "heroes-mode", "active-map-mode"];
+
 export function createUI(els, state) {
+  // These setters are injected later by app.js so UI can coordinate feature
+  // modules without hard-coding imports in every direction.
   let renderMapSidebarButtons = () => {};
-  let recordChange = () => {};
-  let activeExpandedCardId = null;
-  let archiveScrollObserver = null;
+  let renderBaseMapMarkers = () => {};
+  let syncTopbar = () => {};
+  let activeMapApi = {
+    cancelDrawingRoute: () => {},
+    focusMarker: () => null,
+    render: () => {},
+    renderButtons: () => {},
+  };
+  let changeRecorder = {
+    upsert: () => {},
+    remove: () => {},
+  };
+  let homebrewController = {
+    render: () => {},
+    focusArticle: () => {},
+  };
   let mapEditorCallbacks = {
     onCreateRegionLabel: () => {},
     onToggleTextMoveMode: () => {},
@@ -11,67 +63,217 @@ export function createUI(els, state) {
     onBrushChange: () => {},
     onMapViewModeChange: () => {},
   };
-  const mapFonts = ["Cinzel", "Inter", "Georgia", "Times New Roman", "Arial", "Verdana", "Trebuchet MS", "Palatino", "Garamond", "Courier New"];
-  const paletteVariableNames = ["--map-fill", "--map-border", "--grid-line", "--fog-a", "--fog-b", "--fog-c"];
-  const basePalettes = new Set(["ember", "night", "frost"]);
-  const editablePanelFields = [
-    els.panelTitle,
-    els.panelSubtitle,
-    els.panelImageCaption,
-    els.panelText,
-    els.fact1,
-    els.fact2,
-    els.fact3,
-  ];
-  const editableTimelineFields = ["event-year", "event-title", "event-text"];
-  const editableArchiveFields = [
-    "archive-group-title",
-    "archive-card-title",
-    "archive-card-text",
-    "archive-expanded-title",
-    "archive-expanded-text",
-  ];
-  let dragArchiveCardMeta = null;
+  const mapTextToolbar = createMapTextToolbarController({
+    els,
+    state,
+    getCallbacks: () => mapEditorCallbacks,
+  });
+  const paletteController = createPaletteController(els, state);
+  const sidebarLegend = createSidebarLegendController({
+    els,
+    state,
+    getUiText: (key) => getUiText(state, key),
+    onEditGroup: editLegendGroup,
+  });
+  const playerSidebar = createPlayerSidebarController({
+    els,
+    state,
+    getChangeRecorder: () => changeRecorder,
+    onNavigate: navigateToEntity,
+    onPlayersChanged: () => renderHeroes(),
+  });
+  const timelineSidebar = createTimelineSidebarController({
+    els,
+    state,
+    getChangeRecorder: () => changeRecorder,
+    renderTimeline,
+  });
+  const timelineActs = createTimelineActsController({
+    els,
+    state,
+    readFileToDataUrl,
+    getChangeRecorder: () => changeRecorder,
+    navigateToEntity,
+    renderTimeline: () => renderTimeline(),
+    renderTimelineSidebarButtons: () => timelineSidebar.renderButtons(),
+    updatePanelFromTimelineEvent: (timelineEvent) => panelDetails.updateFromTimelineEvent(timelineEvent),
+  });
+  const archiveSidebar = createArchiveSidebarController(els, state, {
+    onSelectGroup: playerSidebar.setPlayerTarget,
+  });
+  const archiveController = createArchiveController({
+    els,
+    state,
+    setActiveSidebarGroup: archiveSidebar.setActiveGroup,
+    onSelectItem: playerSidebar.setPlayerTarget,
+  });
+  const heroesController = createHeroesController({
+    els,
+    state,
+    onNavigate: navigateToEntity,
+    onSelectItem: playerSidebar.setPlayerTarget,
+  });
+  const searchController = createGlobalSearchController({
+    els,
+    state,
+    onNavigate: navigateToEntity,
+  });
+  const dataQualityController = createDataQualityController({
+    els,
+    state,
+    onNavigate: navigateToEntity,
+  });
+  const editorActions = createEditorActionsController({
+    els,
+    state,
+    generateEntityId,
+    getChangeRecorder: () => changeRecorder,
+    getMapEditorCallbacks: () => mapEditorCallbacks,
+    renderArchive,
+    renderArchiveSidebarButtons: archiveSidebar.renderButtons,
+    renderHeroes,
+    renderTimeline,
+    renderTimelineSidebarButtons: timelineSidebar.renderButtons,
+    openDataQualityReport: dataQualityController.open,
+  });
+  const mapControls = createMapControlsController({
+    els,
+    state,
+    getMapEditorCallbacks: () => mapEditorCallbacks,
+    renderArchive,
+  });
+  const panelDetails = createPanelDetailsController({
+    els,
+    state,
+    getChangeRecorder: () => changeRecorder,
+    onSelectTarget: playerSidebar.setPlayerTarget,
+    togglePanel,
+    setMapEditorControlsVisible,
+    refreshEditorActionButtons,
+    rerenderMapMarkers: () => renderBaseMapMarkers(),
+  });
 
-  const mapViewModes = ["author", "vector", "vector-colored"];
+  function remapHeroReferences(heroId, fromGroupId, toGroupId, recorder = changeRecorder) {
+    // Group ids are part of a hero link identity, so moving a hero between
+    // groups requires rewriting every place that points at that hero.
+    const normalizedHeroId = String(heroId || "").trim();
+    const normalizedFromGroupId = String(fromGroupId || "").trim();
+    const normalizedToGroupId = String(toGroupId || "").trim();
+    if (!normalizedHeroId || !normalizedFromGroupId || !normalizedToGroupId) return;
 
-  function getArchiveImageVariantKey() {
-    return state.mapViewMode === "author" ? "author" : "interactive";
-  }
+    playerSidebar.remapHeroReference(normalizedHeroId, normalizedFromGroupId, normalizedToGroupId);
 
-  function ensureArchiveImageVariants(item) {
-    if (!item || typeof item !== "object") return;
-    if (!item.imageVariants || typeof item.imageVariants !== "object") item.imageVariants = {};
-  }
+    let playersChanged = false;
+    state.playersData = (state.playersData || []).map((player) => {
+      let changed = false;
+      const nextCharacters = (player.characters || []).map((character) => {
+        if (
+          character?.id === normalizedHeroId
+          && String(character.groupId || "") === normalizedFromGroupId
+        ) {
+          changed = true;
+          return {
+            ...character,
+            groupId: normalizedToGroupId,
+          };
+        }
+        return character;
+      });
 
-  function getArchiveItemImageUrl(item) {
-    const variantKey = getArchiveImageVariantKey();
-    const variantUrl = item?.imageVariants?.[variantKey]?.trim?.() || "";
-    if (variantUrl) return variantUrl;
-    return item?.imageUrl?.trim?.() || "";
-  }
-
-  function setMapDisplayMode(mode, options = {}) {
-    const nextMode = mapViewModes.includes(mode) ? mode : "author";
-    const shouldRenderArchive = options.rerenderArchive !== false;
-    state.mapViewMode = nextMode;
-
-    document.body.classList.toggle("map-view-author", nextMode === "author");
-    document.body.classList.toggle("map-view-vector", nextMode === "vector");
-    document.body.classList.toggle("map-view-vector-colored", nextMode === "vector-colored");
-
-    const modeButtons = els.mapViewSwitcher?.querySelectorAll?.("[data-map-view]") || [];
-    modeButtons.forEach((button) => {
-      button.classList.toggle("active", button.dataset.mapView === nextMode);
+      if (!changed) return player;
+      playersChanged = true;
+      const nextPlayer = {
+        ...player,
+        characters: nextCharacters,
+      };
+      recorder.upsert?.("player", nextPlayer.id, nextPlayer);
+      return nextPlayer;
     });
 
-    mapEditorCallbacks.onMapViewModeChange(nextMode);
+    (state.heroesData || []).forEach((group) => {
+      (group.items || []).forEach((hero) => {
+        if (!Array.isArray(hero.links) || !hero.links.length) return;
 
-    if (shouldRenderArchive) {
-      renderArchive();
+        let changed = false;
+        hero.links = hero.links.map((link) => {
+          if (
+            link?.type === "heroItem"
+            && link.id === normalizedHeroId
+            && String(link.groupId || "") === normalizedFromGroupId
+          ) {
+            changed = true;
+            return {
+              ...link,
+              groupId: normalizedToGroupId,
+            };
+          }
+          return link;
+        });
+
+        if (changed) recorder.upsert?.("heroItem", hero.id, hero, { groupId: group.id });
+      });
+    });
+
+    if (
+      state.currentHeroId === normalizedHeroId
+      && String(state.activeHeroGroupId || "") === normalizedFromGroupId
+    ) {
+      state.activeHeroGroupId = normalizedToGroupId;
     }
+
+    if (playersChanged) playerSidebar.renderPlayers();
   }
 
+  function remapArchiveItemReferences(itemId, fromGroupId, toGroupId, recorder = changeRecorder) {
+    // Archive items can be referenced from heroes, players, and markers. When an
+    // item changes group, we keep those cross-links coherent here.
+    const normalizedItemId = String(itemId || "").trim();
+    const normalizedFromGroupId = String(fromGroupId || "").trim();
+    const normalizedToGroupId = String(toGroupId || "").trim();
+    if (!normalizedItemId || !normalizedFromGroupId || !normalizedToGroupId) return;
+
+    playerSidebar.remapArchiveItemReference(normalizedItemId, normalizedFromGroupId, normalizedToGroupId);
+
+    (state.heroesData || []).forEach((group) => {
+      (group.items || []).forEach((hero) => {
+        if (!Array.isArray(hero.links) || !hero.links.length) return;
+
+        let changed = false;
+        hero.links = hero.links.map((link) => {
+          if (
+            link?.type === "archiveItem"
+            && link.id === normalizedItemId
+            && String(link.groupId || "") === normalizedFromGroupId
+          ) {
+            changed = true;
+            return {
+              ...link,
+              groupId: normalizedToGroupId,
+            };
+          }
+          return link;
+        });
+
+        if (changed) recorder.upsert?.("heroItem", hero.id, hero, { groupId: group.id });
+      });
+    });
+
+    (state.markersData || []).forEach((marker) => {
+      const linkedItemId = String(marker.archiveItemId || "").trim();
+      const linkedGroupId = String(marker.archiveGroupId || "").trim();
+      if (linkedItemId !== normalizedItemId || linkedGroupId !== normalizedFromGroupId) return;
+
+      marker.archiveGroupId = normalizedToGroupId;
+      recorder.upsert?.("marker", marker.id, marker);
+    });
+
+    if (
+      state.currentArchiveItemId === normalizedItemId
+      && String(state.activeArchiveGroupId || "") === normalizedFromGroupId
+    ) {
+      state.activeArchiveGroupId = normalizedToGroupId;
+    }
+  }
   function generateEntityId(prefix) {
     return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   }
@@ -82,76 +284,112 @@ export function createUI(els, state) {
     return `assets/markers/${markerId}-${Date.now()}.${ext}`;
   }
 
-  function updatePanelImageView(marker) {
-    const imageUrl = marker?.imageUrl?.trim() || "";
-    const caption = marker?.imageText || "Здесь позже может быть портрет города, герб, карта региона или иллюстрация точки интереса";
-
-    els.panelImageCaption.textContent = caption;
-    els.panelImageUrlInput.value = imageUrl;
-    els.panelImageHint.textContent = marker?.imageAssetSuggestedPath
-      ? `Рекомендуемый путь ассета: ${marker.imageAssetSuggestedPath}`
-      : "Можно вставить URL или перетащить файл на область превью.";
-
-    if (!imageUrl) {
-      els.panelImagePreview.hidden = true;
-      els.panelImagePreview.removeAttribute("src");
-      return;
-    }
-
-    els.panelImagePreview.src = imageUrl;
-    els.panelImagePreview.hidden = false;
-  }
-
-  function parseTimelineOrderValue(yearText) {
-    const source = (yearText || "").toUpperCase().trim();
-    if (!source) return Number.POSITIVE_INFINITY;
-
-    const nowMatch = source.match(/^NOW(?:\s*([+-])\s*(\d+))?$/);
-    if (nowMatch) {
-      const sign = nowMatch[1] === "-" ? -1 : 1;
-      const delta = Number(nowMatch[2] || 0);
-      return 1_000_000 + (sign * delta);
-    }
-
-    const ageMatch = source.match(/^(-?\d+(?:\.\d+)?)\s*AGE$/);
-    if (ageMatch) return Number(ageMatch[1]);
-
-    const numeric = Number(source);
-    if (Number.isFinite(numeric)) return numeric;
-    return Number.POSITIVE_INFINITY;
-  }
-
-  function normalizeTimelineOrderByDate() {
-    state.eventsData.sort((a, b) => {
-      const left = parseTimelineOrderValue(a.year);
-      const right = parseTimelineOrderValue(b.year);
-      if (left !== right) return left - right;
-      return String(a.id || "").localeCompare(String(b.id || ""));
-    });
-  }
-
-  function setSidebarRenderers({ mapButtonsRenderer }) {
+  function setSidebarRenderers({ mapButtonsRenderer, mapMarkersRenderer }) {
     renderMapSidebarButtons = typeof mapButtonsRenderer === "function" ? mapButtonsRenderer : () => {};
+    renderBaseMapMarkers = typeof mapMarkersRenderer === "function" ? mapMarkersRenderer : () => {};
+  }
+
+  function setActiveMapController(controller) {
+    activeMapApi = {
+      cancelDrawingRoute: typeof controller?.cancelDrawingRoute === "function" ? controller.cancelDrawingRoute : () => {},
+      focusMarker: typeof controller?.focusMarker === "function" ? controller.focusMarker : () => null,
+      render: typeof controller?.render === "function" ? controller.render : () => {},
+      renderButtons: typeof controller?.renderButtons === "function" ? controller.renderButtons : () => {},
+    };
   }
 
   function setupMapEditorCallbacks(callbacks) {
     mapEditorCallbacks = { ...mapEditorCallbacks, ...(callbacks || {}) };
   }
 
-  function setChangeRecorder(recorder) {
-    recordChange = typeof recorder === "function" ? recorder : () => {};
+  function normalizeRecorder(recorder) {
+    if (typeof recorder === "function") {
+      return {
+        upsert: recorder,
+        remove: () => {},
+      };
+    }
+
+    return {
+      upsert: typeof recorder?.upsert === "function" ? recorder.upsert : () => {},
+      remove: typeof recorder?.remove === "function" ? recorder.remove : () => {},
+    };
   }
 
+  function replaceActiveMarkers(nextMarkers) {
+    state.activeMapData = replaceActiveMapMarkers(state.activeMapData, nextMarkers);
+    activeMapApi.render();
+  }
+
+  function upsertActiveMarker(id, value) {
+    const markers = [...normalizeActiveMapData(state.activeMapData).markers];
+    const index = markers.findIndex((entry) => entry.id === id);
+    if (index >= 0) markers[index] = value;
+    else markers.push(value);
+    replaceActiveMarkers(markers);
+  }
+
+  function removeActiveMarker(id) {
+    const markers = normalizeActiveMapData(state.activeMapData).markers
+      .filter((entry) => entry.id !== id);
+    replaceActiveMarkers(markers);
+  }
+
+  function setChangeRecorder(recorder) {
+    const normalizedRecorder = normalizeRecorder(recorder);
+
+    changeRecorder = {
+      upsert: (entity, id, value, extra) => {
+        if (entity === "activeMarker") {
+          upsertActiveMarker(id, value);
+          return;
+        }
+        normalizedRecorder.upsert(entity, id, value, extra);
+      },
+      remove: (entity, id, extra) => {
+        if (entity === "activeMarker") {
+          removeActiveMarker(id);
+          return;
+        }
+        normalizedRecorder.remove(entity, id, extra);
+      },
+    };
+  }
+
+  // Sidebar buttons are re-rendered often. Forcing a reflow here restarts the
+  // fade animation so the transition still looks intentional after updates.
   function swapSidebarContent(renderer) {
     els.toolButtonsContainer.classList.remove("sidebar-fade");
     renderer();
-    // Принудительный reflow нужен, чтобы CSS-анимация reliably перезапускалась при каждой смене контента.
+    // Форсируем reflow, чтобы анимация fade на sidebar-кнопках корректно перезапускалась после перерендера.
     void els.toolButtonsContainer.offsetWidth;
     els.toolButtonsContainer.classList.add("sidebar-fade");
+    sidebarLegend.render();
   }
 
   function setSidebarTitle(text) {
     els.sidebarTitle.textContent = text;
+  }
+
+  function editLegendGroup(groupId) {
+    if (!state.editMode) return;
+    const group = (state.groupsData || []).find((entry) => entry.id === groupId);
+    if (!group) return;
+
+    const currentName = getLocalizedText(group, "name", state, group.name || "Слой карты");
+    const nextName = window.prompt("Название обозначения в легенде", currentName);
+    if (nextName == null) return;
+
+    const currentShort = getLocalizedText(group, "short", state, group.short || "?");
+    const nextShort = window.prompt("Короткое обозначение на кнопке", currentShort);
+    if (nextShort == null) return;
+
+    setLocalizedValue(group, "name", nextName.trim() || currentName, state);
+    setLocalizedValue(group, "short", nextShort.trim() || currentShort, state);
+    changeRecorder.upsert("markerGroup", group.id, group);
+    renderBaseMapMarkers();
+    renderMapSidebarButtons();
+    if (!els.sidebarLegendPanel.hidden) sidebarLegend.render();
   }
 
   function readFileToDataUrl(file) {
@@ -159,155 +397,23 @@ export function createUI(els, state) {
       const reader = new FileReader();
       reader.onload = () => resolve(String(reader.result || ""));
       reader.onerror = () => reject(new Error("Не удалось прочитать файл изображения."));
+      reader.onerror = () => reject(new Error("Failed to read image file."));
       reader.readAsDataURL(file);
     });
   }
 
-  function renderArchiveCardImage(imageNode, item) {
-    imageNode.innerHTML = "";
-    const imageUrl = getArchiveItemImageUrl(item);
-    if (!imageUrl) {
-      imageNode.textContent = item?.imageLabel || "Изображение";
-      return;
-    }
-
-    const preview = document.createElement("img");
-    preview.className = "archive-card-image-preview";
-    preview.src = imageUrl;
-    preview.alt = item?.imageLabel || item?.title || "Иллюстрация карточки архива";
-    imageNode.appendChild(preview);
-  }
-
-  function scrollToTimelineEvent(eventId) {
-    const eventCard = els.timelineContainer.querySelector(`[data-event-id="${eventId}"]`);
-    if (!eventCard) return;
-    eventCard.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
-  }
-
-  function renderTimelineSidebarButtons() {
-    els.toolButtonsContainer.innerHTML = "";
-
-    const actions = [
-      { label: "Старт", title: "Начало компании", eventId: "founding" },
-      { label: "NOW", title: "Текущая эпоха", eventId: "campaign-start" },
-      { label: "Союз", title: "Союз гильдий", eventId: "guild-union" },
-    ];
-
-    actions.forEach((action) => {
-      const button = document.createElement("button");
-      button.className = "tool-btn active";
-      button.textContent = action.label;
-      button.title = action.title;
-      button.addEventListener("click", () => scrollToTimelineEvent(action.eventId));
-      els.toolButtonsContainer.appendChild(button);
-    });
-  }
-
-  function getArchiveShortLabel(groupName) {
-    const cleaned = (groupName || "").replace(/\s+/g, "").trim();
-    return cleaned.slice(0, 2) || "??";
-  }
-
-  function setActiveArchiveSidebarGroup(groupId) {
-    state.activeArchiveGroupId = groupId;
-    const buttons = els.toolButtonsContainer.querySelectorAll(".tool-btn");
-    buttons.forEach((button) => button.classList.toggle("active", button.dataset.archiveGroup === groupId));
-  }
-
-  function renderArchiveSidebarButtons() {
-    els.toolButtonsContainer.innerHTML = "";
-
-    state.archiveData.forEach((group) => {
-      const button = document.createElement("button");
-      button.className = "tool-btn";
-      button.dataset.archiveGroup = group.id;
-      button.textContent = getArchiveShortLabel(group.title);
-      button.title = group.title;
-      button.addEventListener("click", () => {
-        const section = els.archiveGroupsContainer.querySelector(`[data-archive-group="${group.id}"]`);
-        if (!section) return;
-        section.scrollIntoView({ behavior: "smooth", block: "start" });
-        setActiveArchiveSidebarGroup(group.id);
-      });
-      els.toolButtonsContainer.appendChild(button);
-    });
-
-    if (state.archiveData[0]?.id) {
-      setActiveArchiveSidebarGroup(state.archiveData[0].id);
-    }
+  function togglePalettePopover(force) {
+    paletteController.togglePopover(force);
   }
 
   function setPalette(paletteName) {
-    const palette = paletteName || "ember";
-    state.currentPalette = palette;
-    document.body.classList.remove("palette-night", "palette-frost");
-    paletteVariableNames.forEach((variableName) => document.body.style.removeProperty(variableName));
-
-    if (palette === "night") document.body.classList.add("palette-night");
-    if (palette === "frost") document.body.classList.add("palette-frost");
-
-    if (!basePalettes.has(palette)) {
-      const customPalette = state.customPalettes.find((entry) => entry.id === palette);
-      if (customPalette?.variables) {
-        Object.entries(customPalette.variables).forEach(([variableName, value]) => {
-          document.body.style.setProperty(variableName, value);
-        });
-      }
-    }
-
-    const paletteOptions = els.palettePopover?.querySelectorAll(".palette-option") || [];
-    paletteOptions.forEach((option) => {
-      option.classList.toggle("active", option.dataset.paletteValue === palette);
-    });
-  }
-
-  function renderCustomPaletteButtons() {
-    if (!els.palettePopover) return;
-    els.palettePopover.querySelectorAll(".palette-option.custom-palette").forEach((node) => node.remove());
-    state.customPalettes.forEach((palette) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "palette-option custom-palette";
-      button.dataset.paletteValue = palette.id;
-      button.textContent = palette.name;
-      els.palettePopover.insertBefore(button, els.addPaletteButton);
-    });
-  }
-
-  function createCustomPaletteFromCurrent() {
-    if (!state.editMode) return;
-    const defaultName = `Custom ${state.customPalettes.length + 1}`;
-    const name = window.prompt("Название палитры", defaultName);
-    if (!name || !name.trim()) return;
-
-    const style = getComputedStyle(document.body);
-    const variables = {};
-    paletteVariableNames.forEach((variableName) => {
-      variables[variableName] = style.getPropertyValue(variableName).trim();
-    });
-
-    const customPalette = {
-      id: `custom-${Date.now()}`,
-      name: name.trim(),
-      variables,
-    };
-    state.customPalettes.push(customPalette);
-    renderCustomPaletteButtons();
-    setPalette(customPalette.id);
-  }
-
-  function togglePalettePopover(force) {
-    if (!els.palettePopover || !els.paletteToggle) return;
-    const isOpen = !els.palettePopover.hidden;
-    const shouldOpen = typeof force === "boolean" ? force : !isOpen;
-    els.palettePopover.hidden = !shouldOpen;
-    els.paletteToggle.classList.toggle("active", shouldOpen);
+    paletteController.setPalette(paletteName);
   }
 
   function togglePanel(force) {
     const shouldOpen = typeof force === "boolean" ? force : !els.content.classList.contains("panel-open");
     els.content.classList.toggle("panel-open", shouldOpen);
-    els.panelHandle.textContent = shouldOpen ? "▶" : "◀";
+    els.panelHandle.textContent = shouldOpen ? "\u25c2" : "\u25b8";
   }
 
   function setModeWord(text, visible) {
@@ -319,850 +425,543 @@ export function createUI(els, state) {
     els.timelineOpenButton.textContent = label;
   }
 
+  function isTypingTarget(target) {
+    if (!(target instanceof Element)) return false;
+    if (target.closest("#globalSearchPanel")) return false;
+    if (target.closest("#dataQualityPanel")) return false;
+    return Boolean(
+      target.closest("input, textarea, select, [contenteditable='true'], [contenteditable='']")
+      || target.matches("input, textarea, select, [contenteditable='true'], [contenteditable='']"),
+    );
+  }
+
+  function refreshTopbarActionButtons() {
+    // The same topbar shell is reused by multiple modes, so this function is
+    // the single place that decides which controls are relevant right now.
+    els.activeMapToggleButton.classList.toggle("active", Boolean(state.activeMapMode));
+    if (els.homebrewOpenButton) {
+      els.homebrewOpenButton.classList.toggle("active", Boolean(state.homebrewMode));
+    }
+    els.renameWorldButton.hidden = !state.editMode;
+    playerSidebar.renderFavorites();
+    playerSidebar.renderPlayers();
+    els.mapReturnButton.hidden = true;
+    const inHomebrew = Boolean(state.homebrewMode);
+    if (els.mapViewEditorTools) els.mapViewEditorTools.hidden = !state.editMode || inHomebrew;
+    els.uploadMapTextureButton.hidden = !state.editMode || state.timelineMode || state.archiveMode || state.homebrewMode || state.heroesMode || state.activeMapMode;
+    els.exportDataButton.hidden = !state.editMode || state.homebrewMode || state.activeMapMode;
+    els.importDataButton.hidden = !state.editMode || state.homebrewMode || state.activeMapMode;
+    els.exportActiveMapButton.hidden = !state.editMode || state.homebrewMode || !state.activeMapMode;
+    if (els.activeMapToggleButton) els.activeMapToggleButton.hidden = inHomebrew;
+    mapControls.renderViewSwitcher();
+    if (els.mapViewSwitcher && inHomebrew) els.mapViewSwitcher.hidden = true;
+    syncTopbar();
+  }
+
   function refreshEditorActionButtons() {
+    // Editor actions are mode-specific. Instead of maintaining separate toolbars
+    // per section, we reveal only the actions that make sense in the current mode.
     const editEnabled = state.editMode;
     const inTimeline = editEnabled && state.timelineMode;
     const inArchive = editEnabled && state.archiveMode;
-    const inMap = editEnabled && !state.timelineMode && !state.archiveMode;
-    const shouldShowAny = inTimeline || inArchive || inMap;
+    const inHeroes = editEnabled && state.heroesMode;
+    const inActiveMap = editEnabled && state.activeMapMode;
+    const inMap = editEnabled && !state.timelineMode && !state.archiveMode && !state.homebrewMode && !state.heroesMode && !state.activeMapMode;
+    const shouldShowAny = inTimeline || inArchive || inHeroes || inMap || inActiveMap;
 
     els.editorActions.hidden = !shouldShowAny;
     els.addRegionLabelButton.hidden = !inMap;
-    els.toggleTextMoveModeButton.hidden = !inMap;
+    els.toggleTextMoveModeButton.hidden = true;
     els.toggleDrawModeButton.hidden = !inMap;
+    els.editLoadingScreenButton.hidden = !editEnabled;
+    els.previewLoadingScreenButton.hidden = !editEnabled;
     els.addTimelineEventButton.hidden = !inTimeline;
     els.addArchiveGroupButton.hidden = !inArchive;
     els.addArchiveItemButton.hidden = !inArchive;
+    els.addHeroGroupButton.hidden = !inHeroes;
+    els.addHeroCardButton.hidden = !inHeroes;
+    els.addActiveMarkerButton.hidden = !inActiveMap;
+    els.addActiveRouteButton.hidden = !inActiveMap;
+    els.toggleActivePinsButton.hidden = !inActiveMap;
+    els.addActiveMarkerButton.classList.toggle("active", inActiveMap && state.activeMapTool === "marker");
+    els.addActiveRouteButton.classList.toggle("active", inActiveMap && state.activeMapTool === "route");
+    els.toggleActivePinsButton.classList.toggle("active", inActiveMap && state.activeMapShowAllMarkers);
+    els.validateDataButton.hidden = !editEnabled;
+    refreshTopbarActionButtons();
+  }
+
+  function setExclusiveMode(activeKey = null) {
+    MODE_STATE_KEYS.forEach((key) => {
+      state[key] = key === activeKey;
+    });
+  }
+
+  // Body classes power most view-level CSS changes. Keeping them centralized
+  // avoids scattered class toggles across unrelated feature modules.
+  function setBodyMode(activeClass = null) {
+    BODY_MODE_CLASSES.forEach((className) => {
+      document.body.classList.toggle(className, className === activeClass);
+    });
   }
 
   function setMapEditorControlsVisible(visible, drawModeActive) {
     els.drawLayerPanel.hidden = !(visible && drawModeActive);
     els.toggleDrawModeButton.classList.toggle("active", Boolean(drawModeActive));
-    els.toggleTextMoveModeButton.classList.toggle("active", Boolean(state.regionTextMoveMode));
+    els.toggleTextMoveModeButton.classList.remove("active");
   }
 
   function openMapTextToolbar(label, rect) {
-    if (!state.editMode || !label) return;
-    if (els.mapTextFontSelect.options.length === 0) {
-      mapFonts.forEach((fontName) => {
-        const option = document.createElement("option");
-        option.value = fontName;
-        option.textContent = fontName;
-        option.style.fontFamily = fontName;
-        els.mapTextFontSelect.appendChild(option);
-      });
-    }
-
-    els.mapTextFontSelect.value = label.fontFamily || "Cinzel";
-    els.mapTextSizeInput.value = String(label.fontSize || 36);
-    els.mapTextColorInput.value = label.color || "#dbeafe";
-    els.mapTextRotateInput.value = String(label.rotation || 0);
-    els.mapTextXInput.value = String(label.x ?? 50);
-    els.mapTextYInput.value = String(label.y ?? 50);
-    els.mapTextBoldButton.classList.toggle("active", Boolean(label.bold));
-    els.mapTextItalicButton.classList.toggle("active", Boolean(label.italic));
-
-    els.mapTextToolbar.hidden = false;
-
-    const fallbackTop = 180;
-    const fallbackLeft = 120;
-    const margin = 24;
-    const desiredTop = (rect?.top || fallbackTop) - 68;
-    const desiredLeft = rect?.left || fallbackLeft;
-    const toolbarWidth = els.mapTextToolbar.offsetWidth || 340;
-    const toolbarHeight = els.mapTextToolbar.offsetHeight || 44;
-    const maxTop = Math.max(margin, window.innerHeight - toolbarHeight - margin);
-    const maxLeft = Math.max(margin, window.innerWidth - toolbarWidth - margin);
-
-    els.mapTextToolbar.style.top = `${Math.min(maxTop, Math.max(margin, desiredTop))}px`;
-    els.mapTextToolbar.style.left = `${Math.min(maxLeft, Math.max(margin, desiredLeft))}px`;
+    mapTextToolbar.open(label, rect);
   }
 
   function closeMapTextToolbar() {
-    els.mapTextToolbar.hidden = true;
+    mapTextToolbar.close();
   }
 
-  function createTimelineEvent() {
-    if (!state.editMode) return;
-    const newEvent = {
-      id: generateEntityId("timeline"),
-      year: "NOW",
-      title: "Новое событие",
-      description: "Добавь описание события.",
-      position: "up",
-    };
-
-    state.eventsData.push(newEvent);
-    normalizeTimelineOrderByDate();
-    recordChange("timelineEvent", newEvent.id, newEvent);
-    renderTimeline();
-    const newCard = els.timelineContainer.querySelector(`[data-event-id="${newEvent.id}"]`);
-    if (newCard) newCard.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+  function setTopbarSync(syncFn) {
+    syncTopbar = typeof syncFn === "function" ? syncFn : () => {};
   }
 
-  function createArchiveGroup() {
-    if (!state.editMode) return;
-    const newGroup = {
-      id: generateEntityId("archive-group"),
-      title: "Новая глава",
-      items: [],
-    };
-    state.archiveData.push(newGroup);
-    state.activeArchiveGroupId = newGroup.id;
-    recordChange("archiveGroup", newGroup.id, newGroup);
-    renderArchive();
-    renderArchiveSidebarButtons();
-    const section = els.archiveGroupsContainer.querySelector(`[data-archive-group="${newGroup.id}"]`);
-    if (section) section.scrollIntoView({ behavior: "smooth", block: "start" });
+  function setHomebrewController(controller) {
+    homebrewController = controller && typeof controller.render === "function"
+      ? controller
+      : { render: () => {}, focusArticle: () => {} };
   }
 
-  function createArchiveItem() {
-    if (!state.editMode) return;
-    const groupChoices = state.archiveData
-      .map((group, index) => `${index + 1}. ${group.title || `Глава ${index + 1}`}`)
-      .join("\n");
-    if (!groupChoices) return;
-    const selectedGroupRaw = window.prompt(`В какую главу добавить карточку?\n${groupChoices}`, "1");
-    if (!selectedGroupRaw) return;
-    const selectedIndex = Number(selectedGroupRaw) - 1;
-    const selectedGroup = state.archiveData[selectedIndex];
-    const groupId = selectedGroup?.id || state.activeArchiveGroupId || state.archiveData[0]?.id;
-    const group = state.archiveData.find((entry) => entry.id === groupId);
-    if (!group) return;
-    group.items = Array.isArray(group.items) ? group.items : [];
-
-    const newItem = {
-      id: generateEntityId("archive-item"),
-      title: "Новая карточка",
-      imageLabel: "Добавь подпись изображения",
-      description: "Короткое описание карточки.",
-      fullDescription: "Подробное описание карточки для расширенного просмотра.",
-      sortOrder: group.items.length,
-    };
-
-    group.items.push(newItem);
-    recordChange("archiveItem", newItem.id, newItem, { groupId: group.id });
-    renderArchive();
-    const card = els.archiveGroupsContainer.querySelector(`[data-card-id="${group.id}-${newItem.id}"]`);
-    if (card) card.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+  function syncTimelineTrackAlignment() {
+    syncTimelineAxisTrackAlignment(els.timelineContainer);
   }
 
-  function setupEditorActionButtons() {
-    els.addRegionLabelButton.addEventListener("click", () => mapEditorCallbacks.onCreateRegionLabel());
-    els.toggleTextMoveModeButton.addEventListener("click", () => mapEditorCallbacks.onToggleTextMoveMode());
-    els.toggleDrawModeButton.addEventListener("click", () => mapEditorCallbacks.onToggleDrawMode());
-    els.addTimelineEventButton.addEventListener("click", createTimelineEvent);
-    els.addArchiveGroupButton.addEventListener("click", createArchiveGroup);
-    els.addArchiveItemButton.addEventListener("click", createArchiveItem);
+  function updateTimelineCurrentSelection() {
+    const cards = els.timelineContainer.querySelectorAll(".event-card");
+    cards.forEach((card) => card.classList.toggle("current", card.dataset.eventId === state.currentTimelineEventId));
+  }
+
+  function highlightElement(element, className = "search-hit") {
+    if (!element) return;
+    element.classList.remove(className);
+    void element.offsetWidth;
+    element.classList.add(className);
+    setTimeout(() => element.classList.remove(className), 1800);
+  }
+
+  function highlightOnNextFrame(resolveElement, options = {}) {
+    requestAnimationFrame(() => {
+      const element = resolveElement();
+      if (options.scrollTarget) {
+        options.scrollTarget(element)?.scrollIntoView?.(
+          options.scrollOptions || { behavior: "smooth", block: "nearest" },
+        );
+      }
+      options.beforeHighlight?.(element);
+      highlightElement(element);
+    });
+  }
+
+  function navigateToEntity(target) {
+    // Navigation is intentionally entity-based, not view-based. Search, player
+    // links, archive links, and homebrew all route through the same dispatcher.
+    if (!target) return;
+    playerSidebar.setPlayerTarget(target);
+
+    if (target.type === "marker") {
+      const marker = state.markersData.find((entry) => entry.id === target.id);
+      openMapMode();
+      if (marker) panelDetails.updateFromMarker(marker);
+      highlightOnNextFrame(() => els.markersContainer.querySelector(`[data-marker-id="${target.id}"]`));
+      return;
+    }
+
+    if (target.type === "activeMarker") {
+      openActiveMapMode();
+      highlightOnNextFrame(() => activeMapApi.focusMarker(target.id));
+      return;
+    }
+
+    if (target.type === "timeline") {
+      const timelineEvent = state.eventsData.find((entry) => entry.id === target.id);
+      state.currentTimelineEventId = target.id;
+      state.currentTimelineEvent = timelineEvent || null;
+      state.currentTimelineActId = timelineEvent?.actId || "";
+      openTimelineMode();
+      if (timelineEvent) panelDetails.updateFromTimelineEvent(timelineEvent);
+      highlightOnNextFrame(
+        () => els.timelineContainer.querySelector(`[data-event-id="${target.id}"]`),
+        {
+          scrollTarget: (eventCard) => eventCard?.closest(".timeline-event-item") || eventCard,
+          scrollOptions: { behavior: "smooth", inline: "center", block: "nearest" },
+          beforeHighlight: () => updateTimelineCurrentSelection(),
+        },
+      );
+      return;
+    }
+
+    if (target.type === "archiveGroup") {
+      state.activeArchiveGroupId = target.id;
+      state.currentArchiveItemId = null;
+      openArchiveMode();
+      highlightOnNextFrame(
+        () => els.archiveGroupsContainer.querySelector(`[data-archive-group="${target.id}"]`),
+        {
+          scrollTarget: (section) => section,
+          scrollOptions: { behavior: "smooth", block: "start" },
+        },
+      );
+      return;
+    }
+
+    if (target.type === "archiveItem") {
+      state.activeArchiveGroupId = target.groupId || state.activeArchiveGroupId;
+      state.currentArchiveItemId = target.id;
+      openArchiveMode();
+      highlightOnNextFrame(() => {
+        archiveController.focusItem(target.groupId, target.id);
+        return els.archiveGroupsContainer.querySelector(`[data-card-id="${target.groupId}-${target.id}"]`);
+      });
+      return;
+    }
+
+    if (target.type === "heroGroup") {
+      state.activeHeroGroupId = target.id;
+      state.currentHeroId = null;
+      openHeroesMode();
+      highlightOnNextFrame(
+        () => els.heroesGroupsContainer.querySelector(`[data-hero-group="${target.id}"]`),
+        {
+          scrollTarget: (section) => section,
+          scrollOptions: { behavior: "smooth", block: "start" },
+        },
+      );
+      return;
+    }
+
+    if (target.type === "heroItem") {
+      state.activeHeroGroupId = target.groupId || state.activeHeroGroupId;
+      state.currentHeroId = target.id;
+      openHeroesMode();
+      highlightOnNextFrame(() => {
+        heroesController.focusItem(target.groupId, target.id);
+        return els.heroesGroupsContainer.querySelector(`[data-group-id="${target.groupId}"][data-hero-id="${target.id}"]`);
+      });
+      return;
+    }
+
+    if (target.type === "homebrewArticle") {
+      state.currentHomebrewArticleId = target.id;
+      openHomebrewMode();
+      homebrewController.focusArticle?.(target.id);
+    }
   }
 
   function openTimelineMode() {
-    state.timelineMode = true;
-    state.archiveMode = false;
-    setModeWord("Timeline", false);
-    setTopModeButton("Timeline");
-    document.body.classList.add("timeline-mode");
-    document.body.classList.remove("archive-mode");
+    setExclusiveMode("timelineMode");
+    setModeWord(getUiText(state, "mode_timeline"), false);
+    setTopModeButton(getUiText(state, "mode_map"));
+    setBodyMode("timeline-mode");
+    togglePanel(false);
+    activeMapApi.cancelDrawingRoute();
+    heroesController.collapseExpandedCards();
     closeMapTextToolbar();
     setMapEditorControlsVisible(false, false);
-    setSidebarTitle("События");
-    swapSidebarContent(renderTimelineSidebarButtons);
+    setSidebarTitle(getUiText(state, "sidebar_events"));
+    renderTimeline();
+    swapSidebarContent(timelineSidebar.renderButtons);
     refreshEditorActionButtons();
-    setTimeout(() => setModeWord("Timeline", true), 120);
-  }
-
-  function setupArchiveScrollTracking() {
-    if (archiveScrollObserver) {
-      archiveScrollObserver.disconnect();
-      archiveScrollObserver = null;
-    }
-
-    const sections = els.archiveGroupsContainer.querySelectorAll(".archive-group");
-    if (!sections.length) return;
-
-    // Наблюдатель синхронизирует активную кнопку в sidebar с наиболее видимой секцией архива.
-    archiveScrollObserver = new IntersectionObserver((entries) => {
-      const visible = entries
-        .filter((entry) => entry.isIntersecting)
-        .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
-      if (!visible.length) return;
-
-      const topGroupId = visible[0].target.dataset.archiveGroup;
-      if (topGroupId) setActiveArchiveSidebarGroup(topGroupId);
-    }, {
-      root: els.archiveScrollContainer,
-      threshold: [0.15, 0.5, 0.75],
-      rootMargin: "-5% 0px -70% 0px",
-    });
-
-    sections.forEach((section) => archiveScrollObserver.observe(section));
+    requestAnimationFrame(syncTimelineTrackAlignment);
+    setTimeout(() => setModeWord(getUiText(state, "mode_timeline"), true), 120);
   }
 
   function renderArchive() {
-    els.archiveGroupsContainer.innerHTML = "";
-
-    state.archiveData.forEach((group) => {
-      const section = document.createElement("section");
-      section.className = "archive-group";
-      section.dataset.archiveGroup = group.id;
-
-      const heading = document.createElement("h2");
-      heading.className = "archive-group-title";
-      heading.textContent = group.title || "Группа";
-      heading.contentEditable = String(state.editMode);
-
-      const cardsGrid = document.createElement("div");
-      cardsGrid.className = "archive-cards";
-
-      const sortedItems = [...(group.items || [])].sort((a, b) => {
-        const left = typeof a.sortOrder === "number" ? a.sortOrder : Number.POSITIVE_INFINITY;
-        const right = typeof b.sortOrder === "number" ? b.sortOrder : Number.POSITIVE_INFINITY;
-        if (left !== right) return left - right;
-        return String(a.id || "").localeCompare(String(b.id || ""));
-      });
-
-      sortedItems.forEach((item, itemIndex) => {
-        const card = document.createElement("article");
-        card.className = "archive-card";
-        card.dataset.cardId = `${group.id}-${item.id || itemIndex}`;
-        card.dataset.groupId = group.id;
-        card.dataset.itemId = item.id || "";
-        card.draggable = state.editMode;
-
-        if (state.editMode) {
-          const expandEditButton = document.createElement("button");
-          expandEditButton.className = "archive-card-expand-edit";
-          expandEditButton.type = "button";
-          expandEditButton.textContent = "раскрыть";
-          expandEditButton.addEventListener("click", (event) => {
-            event.stopPropagation();
-            openArchiveCardExpanded(section, card, item, group.id);
-          });
-          card.appendChild(expandEditButton);
-        }
-
-        const image = document.createElement("div");
-        image.className = "archive-card-image";
-        renderArchiveCardImage(image, item);
-        if (state.editMode) {
-          image.title = "Вставь/перетащи изображение. Двойной клик — изменить подпись.";
-        }
-
-        const title = document.createElement("h3");
-        title.className = "archive-card-title";
-        title.textContent = item.title || "Без названия";
-        title.contentEditable = String(state.editMode);
-
-        const text = document.createElement("p");
-        text.className = "archive-card-text";
-        text.textContent = item.description || "Описание пока не заполнено.";
-        text.contentEditable = String(state.editMode);
-
-        card.append(image, title, text);
-        cardsGrid.appendChild(card);
-      });
-
-      section.append(heading, cardsGrid);
-      els.archiveGroupsContainer.appendChild(section);
-    });
-
-    setupArchiveCardInteractions();
-    setupArchiveScrollTracking();
-  }
-
-  function collapseExpandedCards() {
-    // Централизованный "reset" состояния: важно вызывать перед переключением режима,
-    // чтобы не оставлять наложенные expanded-карточки в DOM.
-    els.archiveGroupsContainer.querySelectorAll(".archive-expanded").forEach((expanded) => expanded.remove());
-    els.archiveGroupsContainer.querySelectorAll(".archive-card.expanded").forEach((card) => card.classList.remove("expanded"));
-    els.archiveGroupsContainer.querySelectorAll(".archive-group.has-expanded").forEach((section) => section.classList.remove("has-expanded"));
-    els.archiveGroupsContainer.querySelectorAll(".archive-cards.is-covered").forEach((grid) => grid.classList.remove("is-covered"));
-    activeExpandedCardId = null;
-  }
-
-  function createExpandedCard(item, cardId) {
-    const expanded = document.createElement("article");
-    expanded.className = "archive-expanded";
-    expanded.dataset.expandedFor = cardId;
-    expanded.dataset.groupId = item.__groupId || "";
-    expanded.dataset.itemId = item.id || "";
-
-    const collapseButton = document.createElement("button");
-    collapseButton.className = "archive-collapse";
-    collapseButton.type = "button";
-    collapseButton.title = "Свернуть";
-    collapseButton.textContent = "↗";
-    collapseButton.addEventListener("click", collapseExpandedCards);
-
-    const title = document.createElement("h3");
-    title.className = "archive-expanded-title";
-    title.textContent = item.title || "Без названия";
-    title.contentEditable = String(state.editMode);
-
-    const text = document.createElement("p");
-    text.className = "archive-expanded-text";
-    text.textContent = item.fullDescription || item.description || "Подробное описание пока не добавлено.";
-    text.contentEditable = String(state.editMode);
-
-    expanded.append(collapseButton, title, text);
-    return expanded;
-  }
-
-  function openArchiveCardExpanded(section, card, item, groupId) {
-    const cardId = card.dataset.cardId;
-    const shouldCollapse = activeExpandedCardId === cardId;
-    collapseExpandedCards();
-    if (shouldCollapse) return;
-
-    const cardsGrid = card.closest(".archive-cards");
-    section.classList.add("has-expanded");
-    if (cardsGrid) cardsGrid.classList.add("is-covered");
-    card.classList.add("expanded");
-    const expanded = createExpandedCard({ ...item, __groupId: groupId }, cardId);
-    section.insertBefore(expanded, cardsGrid || section.lastElementChild);
-    activeExpandedCardId = cardId;
-    expanded.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }
-
-  function setupArchiveCardInteractions() {
-    const sectionNodes = els.archiveGroupsContainer.querySelectorAll(".archive-group");
-
-    sectionNodes.forEach((section, groupIndex) => {
-      const cards = section.querySelectorAll(".archive-card");
-      cards.forEach((card, cardIndex) => {
-        card.addEventListener("click", () => {
-          if (state.editMode) return;
-          const group = state.archiveData[groupIndex];
-          const itemId = card.dataset.itemId;
-          const item = group?.items?.find((entry) => entry.id === itemId) || group?.items?.[cardIndex];
-          if (!item) return;
-          openArchiveCardExpanded(section, card, item, group.id);
-        });
-      });
-    });
+    archiveController.render();
   }
 
   function openArchiveMode() {
-    state.timelineMode = false;
-    state.archiveMode = true;
-    setModeWord("Archive", true);
-    setTopModeButton("Map");
-    document.body.classList.remove("timeline-mode");
-    document.body.classList.add("archive-mode");
+    setExclusiveMode("archiveMode");
+    setModeWord(getUiText(state, "mode_archive"), true);
+    setTopModeButton(getUiText(state, "mode_map"));
+    setBodyMode("archive-mode");
+    togglePanel(false);
+    activeMapApi.cancelDrawingRoute();
     closeMapTextToolbar();
+    heroesController.collapseExpandedCards();
     setMapEditorControlsVisible(false, false);
-    setSidebarTitle("Разделы");
-    collapseExpandedCards();
+    setSidebarTitle(getUiText(state, "sidebar_sections"));
+    archiveController.collapseExpandedCards();
     renderArchive();
-    swapSidebarContent(renderArchiveSidebarButtons);
+    swapSidebarContent(archiveSidebar.renderButtons);
     refreshEditorActionButtons();
   }
 
   function openMapMode() {
-    state.timelineMode = false;
-    state.archiveMode = false;
-    setModeWord("Map", true);
-    setTopModeButton("Timeline");
-    document.body.classList.remove("timeline-mode", "archive-mode");
-    setSidebarTitle("Слои");
-    collapseExpandedCards();
+    setExclusiveMode(null);
+    setModeWord(getUiText(state, "mode_map"), true);
+    setTopModeButton(getUiText(state, "mode_timeline"));
+    setBodyMode(null);
+    togglePanel(false);
+    activeMapApi.cancelDrawingRoute();
+    setSidebarTitle(getUiText(state, "sidebar_layers"));
+    archiveController.collapseExpandedCards();
     swapSidebarContent(renderMapSidebarButtons);
+    renderBaseMapMarkers();
+    activeMapApi.render();
     setMapEditorControlsVisible(state.editMode, state.drawMode);
     refreshEditorActionButtons();
   }
 
-  function updatePanelFromMarker(marker) {
-    state.currentMarker = marker;
-    els.panelTitle.textContent = marker.title || "Без названия";
-    els.panelSubtitle.textContent = marker.type || "Метка";
-    updatePanelImageView(marker);
-    els.panelText.textContent = marker.description || "Описание пока не добавлено.";
-    els.fact1.textContent = marker.facts?.[0] || "—";
-    els.fact2.textContent = marker.facts?.[1] || "—";
-    els.fact3.textContent = marker.facts?.[2] || "—";
-    togglePanel(true);
-  }
-
-  function setPanelEditable(enabled) {
-    editablePanelFields.forEach((el) => {
-      el.contentEditable = String(enabled);
-    });
-    els.timelineContainer.querySelectorAll(".event-year, .event-title, .event-text").forEach((el) => {
-      el.contentEditable = String(enabled);
-    });
-    els.archiveGroupsContainer
-      .querySelectorAll(".archive-group-title, .archive-card-title, .archive-card-text, .archive-expanded-title, .archive-expanded-text")
-      .forEach((el) => {
-        el.contentEditable = String(enabled);
-      });
-    els.panelImageControls.hidden = !enabled;
-    setMapEditorControlsVisible(enabled && !state.timelineMode && !state.archiveMode, state.drawMode);
+  function openHomebrewMode() {
+    setExclusiveMode("homebrewMode");
+    setModeWord(getUiText(state, "mode_homebrew"), true);
+    setTopModeButton(getUiText(state, "mode_map"));
+    setBodyMode("homebrew-mode");
+    togglePanel(false);
+    activeMapApi.cancelDrawingRoute();
+    closeMapTextToolbar();
+    archiveController.collapseExpandedCards();
+    heroesController.collapseExpandedCards();
+    setMapEditorControlsVisible(false, false);
+    homebrewController.render();
     refreshEditorActionButtons();
   }
 
-  function savePanelToCurrentMarker() {
-    if (!state.editMode || !state.currentMarker) return;
-    // Панель редактирует текущий объект напрямую — модель и UI остаются консистентны без промежуточного буфера.
-    state.currentMarker.title = els.panelTitle.textContent.trim();
-    state.currentMarker.type = els.panelSubtitle.textContent.trim();
-    state.currentMarker.imageUrl = els.panelImageUrlInput.value.trim();
-    state.currentMarker.imageText = els.panelImageCaption.textContent.trim();
-    state.currentMarker.description = els.panelText.textContent.trim();
-    state.currentMarker.facts = [els.fact1.textContent.trim(), els.fact2.textContent.trim(), els.fact3.textContent.trim()];
-    if (state.currentMarker.id) recordChange("marker", state.currentMarker.id, state.currentMarker);
+  function openHeroesMode() {
+    setExclusiveMode("heroesMode");
+    setModeWord(getUiText(state, "mode_heroes"), false);
+    setBodyMode("heroes-mode");
+    togglePanel(false);
+    activeMapApi.cancelDrawingRoute();
+    closeMapTextToolbar();
+    archiveController.collapseExpandedCards();
+    setMapEditorControlsVisible(false, false);
+    renderHeroes();
+    refreshEditorActionButtons();
+  }
+
+  function openActiveMapMode() {
+    setExclusiveMode("activeMapMode");
+    setModeWord(getUiText(state, "mode_active_map"), true);
+    setTopModeButton(getUiText(state, "mode_timeline"));
+    setBodyMode("active-map-mode");
+    togglePanel(false);
+    closeMapTextToolbar();
+    archiveController.collapseExpandedCards();
+    heroesController.collapseExpandedCards();
+    setSidebarTitle(getUiText(state, "sidebar_active"));
+    swapSidebarContent(activeMapApi.renderButtons);
+    renderBaseMapMarkers();
+    activeMapApi.render();
+    setMapEditorControlsVisible(false, false);
+    refreshEditorActionButtons();
+  }
+
+  function renderHeroes() {
+    heroesController.render();
+  }
+
+  function handleEscape() {
+    if (!els.dataQualityPanel.hidden) {
+      dataQualityController.close();
+      return true;
+    }
+
+    if (!els.globalSearchPanel.hidden) {
+      searchController.close();
+      return true;
+    }
+
+    if (!els.favoritesPanel.hidden || !els.notesPanel.hidden || !els.playersPanel.hidden) {
+      playerSidebar.close();
+      return true;
+    }
+
+    if (!els.sidebarLegendPanel.hidden) {
+      sidebarLegend.close();
+      return true;
+    }
+
+    if (!els.mapTextToolbar.hidden) {
+      mapTextToolbar.close();
+      return true;
+    }
+
+    if (state.archiveMode || state.timelineMode || state.homebrewMode || state.heroesMode || state.activeMapMode) {
+      openMapMode();
+      return true;
+    }
+
+    if (els.content.classList.contains("panel-open")) {
+      togglePanel(false);
+      return true;
+    }
+
+    return false;
   }
 
   function renderTimeline() {
     els.timelineContainer.innerHTML = "";
-    normalizeTimelineOrderByDate();
-    state.eventsData.forEach((event) => {
-      const item = document.createElement("div");
-      item.className = "timeline-event-item";
-
-      const card = document.createElement("article");
-      card.className = "event-card";
-
-      const year = document.createElement("div");
-      year.className = "event-year";
-      year.textContent = event.year || "";
-      year.contentEditable = String(state.editMode);
-
-      const title = document.createElement("h3");
-      title.className = "event-title";
-      title.textContent = event.title || "Без названия";
-      title.contentEditable = String(state.editMode);
-
-      const text = document.createElement("p");
-      text.className = "event-text";
-      text.textContent = event.description || "";
-      text.contentEditable = String(state.editMode);
-
-      card.dataset.eventId = event.id || "";
-
-      const dot = document.createElement("div");
-      dot.className = "event-dot";
-
-      const dotDate = document.createElement("div");
-      dotDate.className = "event-timeline-date";
-      dotDate.textContent = event.year || "";
-
-      card.append(year, title, text);
-      item.append(card, dot, dotDate);
-      els.timelineContainer.appendChild(item);
+    els.timelineContainer.appendChild(createTimelineAxisSvg());
+    normalizeTimelineOrderByDate(state.eventsData);
+    timelineActs.renderTimelineActTabs();
+    timelineActs.getVisibleTimelineEvents().forEach((event) => {
+      els.timelineContainer.appendChild(createTimelineEventItem(event, {
+        editMode: state.editMode,
+        localizationContext: state,
+        actsData: state.timelineActsData,
+        onToggleShortcut: timelineSidebar.toggleShortcut,
+        onTogglePosition: editorActions.toggleTimelineEventPosition,
+        onDelete: editorActions.deleteTimelineEvent,
+        onActivateMarkerLink: timelineActs.handleTimelineMarkerLink,
+        onAssignAct: editorActions.assignTimelineEventAct,
+      }));
     });
+
+    els.timelineContainer.appendChild(createTimelineFutureItem(getUiText(state, "timeline_future")));
+    updateTimelineCurrentSelection();
+    requestAnimationFrame(syncTimelineTrackAlignment);
   }
 
-  function setupInlineEditingInteractions() {
-    els.timelineContainer.addEventListener("input", (event) => {
-      if (!state.editMode) return;
-      const target = event.target;
-      if (!editableTimelineFields.some((className) => target.classList.contains(className))) return;
+  function rerenderCurrentMode() {
+    renderBaseMapMarkers();
+    activeMapApi.render();
 
-      const card = target.closest(".event-card");
-      const eventId = card?.dataset?.eventId;
-      if (!eventId) return;
-
-      const timelineEvent = state.eventsData.find((entry) => entry.id === eventId);
-      if (!timelineEvent) return;
-
-      if (target.classList.contains("event-year")) timelineEvent.year = target.textContent.trim();
-      if (target.classList.contains("event-title")) timelineEvent.title = target.textContent.trim();
-      if (target.classList.contains("event-text")) timelineEvent.description = target.textContent.trim();
-
-      if (target.classList.contains("event-year")) {
-        const item = card.closest(".timeline-event-item");
-        const timelineDate = item?.querySelector(".event-timeline-date");
-        if (timelineDate) timelineDate.textContent = timelineEvent.year || "";
-      }
-
-      recordChange("timelineEvent", timelineEvent.id, timelineEvent);
-    });
-
-    els.timelineContainer.addEventListener("focusout", (event) => {
-      if (!state.editMode) return;
-      const target = event.target;
-      if (!target.classList?.contains("event-year")) return;
-      normalizeTimelineOrderByDate();
+    if (state.timelineMode) {
+      setModeWord(getUiText(state, "mode_timeline"), true);
+      setTopModeButton(getUiText(state, "mode_map"));
       renderTimeline();
-    });
-
-    els.archiveGroupsContainer.addEventListener("input", (event) => {
-      if (!state.editMode) return;
-      const target = event.target;
-      if (!editableArchiveFields.some((className) => target.classList.contains(className))) return;
-
-      if (target.classList.contains("archive-group-title")) {
-        const section = target.closest(".archive-group");
-        const groupId = section?.dataset?.archiveGroup;
-        if (!groupId) return;
-        const group = state.archiveData.find((entry) => entry.id === groupId);
-        if (!group) return;
-        group.title = target.textContent.trim();
-        const relatedSidebarButton = els.toolButtonsContainer.querySelector(`[data-archive-group="${group.id}"]`);
-        if (relatedSidebarButton) {
-          relatedSidebarButton.title = group.title;
-          relatedSidebarButton.textContent = getArchiveShortLabel(group.title);
-        }
-        recordChange("archiveGroup", group.id, group);
-        return;
-      }
-
-      const card = target.closest(".archive-card");
-      if (card) {
-        const groupId = card.dataset.groupId;
-        const itemId = card.dataset.itemId;
-        const group = state.archiveData.find((entry) => entry.id === groupId);
-        const item = group?.items?.find((entry) => entry.id === itemId);
-        if (!group || !item) return;
-
-        if (target.classList.contains("archive-card-title")) item.title = target.textContent.trim();
-        if (target.classList.contains("archive-card-text")) item.description = target.textContent.trim();
-
-        recordChange("archiveItem", item.id, item, { groupId: group.id });
-        return;
-      }
-
-      const expanded = target.closest(".archive-expanded");
-      if (!expanded) return;
-      const groupId = expanded.dataset.groupId;
-      const itemId = expanded.dataset.itemId;
-      const group = state.archiveData.find((entry) => entry.id === groupId);
-      const item = group?.items?.find((entry) => entry.id === itemId);
-      if (!group || !item) return;
-
-      if (target.classList.contains("archive-expanded-title")) item.title = target.textContent.trim();
-      if (target.classList.contains("archive-expanded-text")) item.fullDescription = target.textContent.trim();
-
-      recordChange("archiveItem", item.id, item, { groupId: group.id });
-    });
-
-    const archiveImageFileInput = document.createElement("input");
-    archiveImageFileInput.type = "file";
-    archiveImageFileInput.accept = "image/*";
-    archiveImageFileInput.hidden = true;
-    document.body.appendChild(archiveImageFileInput);
-    let activeArchiveImageTarget = null;
-
-    const resolveArchiveImageItem = (target) => {
-      const imageNode = target?.closest?.(".archive-card-image");
-      const card = target?.closest?.(".archive-card");
-      if (!imageNode || !card) return null;
-      const group = state.archiveData.find((entry) => entry.id === card.dataset.groupId);
-      const item = group?.items?.find((entry) => entry.id === card.dataset.itemId);
-      if (!group || !item) return null;
-      return { imageNode, group, item };
-    };
-
-    const applyArchiveImageFile = async (file, imageNode, group, item) => {
-      if (!file || !state.editMode || !file.type?.startsWith("image/")) return;
-      try {
-        ensureArchiveImageVariants(item);
-        const variantKey = getArchiveImageVariantKey();
-        item.imageVariants[variantKey] = await readFileToDataUrl(file);
-        renderArchiveCardImage(imageNode, item);
-        recordChange("archiveItem", item.id, item, { groupId: group.id });
-      } catch (error) {
-        console.error(error);
-      }
-    };
-
-    els.archiveGroupsContainer.addEventListener("dblclick", (event) => {
-      if (!state.editMode) return;
-      const resolved = resolveArchiveImageItem(event.target);
-      if (!resolved) return;
-      event.preventDefault();
-      const nextLabel = window.prompt("Подпись изображения", resolved.item.imageLabel || "Изображение");
-      if (nextLabel == null) return;
-      resolved.item.imageLabel = nextLabel.trim() || "Изображение";
-      renderArchiveCardImage(resolved.imageNode, resolved.item);
-      recordChange("archiveItem", resolved.item.id, resolved.item, { groupId: resolved.group.id });
-    });
-
-    els.archiveGroupsContainer.addEventListener("click", (event) => {
-      if (!state.editMode) return;
-      const resolved = resolveArchiveImageItem(event.target);
-      if (!resolved) return;
-      activeArchiveImageTarget = resolved;
-      archiveImageFileInput.click();
-    });
-
-    archiveImageFileInput.addEventListener("change", async (event) => {
-      const [file] = Array.from(event.target.files || []);
-      if (file && activeArchiveImageTarget) {
-        await applyArchiveImageFile(
-          file,
-          activeArchiveImageTarget.imageNode,
-          activeArchiveImageTarget.group,
-          activeArchiveImageTarget.item,
-        );
-      }
-      archiveImageFileInput.value = "";
-      activeArchiveImageTarget = null;
-    });
-
-    els.archiveGroupsContainer.addEventListener("paste", async (event) => {
-      if (!state.editMode) return;
-      const resolved = resolveArchiveImageItem(event.target);
-      if (!resolved) return;
-      const imageItem = Array.from(event.clipboardData?.items || []).find((item) => item.type.startsWith("image/"));
-      const file = imageItem?.getAsFile();
-      if (!file) return;
-      event.preventDefault();
-      await applyArchiveImageFile(file, resolved.imageNode, resolved.group, resolved.item);
-    });
-
-    els.archiveGroupsContainer.addEventListener("dragstart", (event) => {
-      if (!state.editMode) return;
-      const card = event.target.closest(".archive-card");
-      if (!card) return;
-      dragArchiveCardMeta = {
-        groupId: card.dataset.groupId,
-        itemId: card.dataset.itemId,
-      };
-      card.classList.add("dragging");
-      event.dataTransfer.effectAllowed = "move";
-      event.dataTransfer.setData("text/plain", `${dragArchiveCardMeta.groupId}:${dragArchiveCardMeta.itemId}`);
-    });
-
-    els.archiveGroupsContainer.addEventListener("dragend", (event) => {
-      const card = event.target.closest(".archive-card");
-      if (card) card.classList.remove("dragging");
-      dragArchiveCardMeta = null;
-    });
-
-    els.archiveGroupsContainer.addEventListener("dragover", (event) => {
-      if (!state.editMode) return;
-
-      const resolved = resolveArchiveImageItem(event.target);
-      if (resolved && !dragArchiveCardMeta) {
-        event.preventDefault();
-        resolved.imageNode.classList.add("is-drop-target");
-        event.dataTransfer.dropEffect = "copy";
-        return;
-      }
-
-      if (!dragArchiveCardMeta) return;
-      if (!event.target.closest(".archive-card")) return;
-      event.preventDefault();
-      event.dataTransfer.dropEffect = "move";
-    });
-
-    els.archiveGroupsContainer.addEventListener("dragleave", (event) => {
-      const imageNode = event.target?.closest?.(".archive-card-image");
-      if (!imageNode) return;
-      imageNode.classList.remove("is-drop-target");
-    });
-
-    els.archiveGroupsContainer.addEventListener("drop", async (event) => {
-      if (!state.editMode) return;
-
-      const resolved = resolveArchiveImageItem(event.target);
-      if (resolved && !dragArchiveCardMeta) {
-        const [file] = Array.from(event.dataTransfer?.files || []);
-        if (!file) return;
-        event.preventDefault();
-        resolved.imageNode.classList.remove("is-drop-target");
-        await applyArchiveImageFile(file, resolved.imageNode, resolved.group, resolved.item);
-        return;
-      }
-
-      if (!dragArchiveCardMeta) return;
-      const targetCard = event.target.closest(".archive-card");
-      if (!targetCard) return;
-      event.preventDefault();
-
-      const sourceGroup = state.archiveData.find((group) => group.id === dragArchiveCardMeta.groupId);
-      const targetGroup = state.archiveData.find((group) => group.id === targetCard.dataset.groupId);
-      if (!sourceGroup || !targetGroup) return;
-      sourceGroup.items = Array.isArray(sourceGroup.items) ? sourceGroup.items : [];
-      targetGroup.items = Array.isArray(targetGroup.items) ? targetGroup.items : [];
-
-      const sourceIndex = sourceGroup.items.findIndex((item) => item.id === dragArchiveCardMeta.itemId);
-      const targetIndex = targetGroup.items.findIndex((item) => item.id === targetCard.dataset.itemId);
-      if (sourceIndex < 0 || targetIndex < 0) return;
-
-      const [movedItem] = sourceGroup.items.splice(sourceIndex, 1);
-      targetGroup.items.splice(targetIndex, 0, movedItem);
-
-      sourceGroup.items.forEach((item, index) => {
-        item.sortOrder = index;
-        recordChange("archiveItem", item.id, item, { groupId: sourceGroup.id });
-      });
-      if (sourceGroup.id !== targetGroup.id) {
-        targetGroup.items.forEach((item, index) => {
-          item.sortOrder = index;
-          recordChange("archiveItem", item.id, item, { groupId: targetGroup.id });
-        });
-      }
-
+      setSidebarTitle(getUiText(state, "sidebar_events"));
+      swapSidebarContent(timelineSidebar.renderButtons);
+    } else if (state.archiveMode) {
+      setModeWord(getUiText(state, "mode_archive"), true);
+      setTopModeButton(getUiText(state, "mode_map"));
       renderArchive();
-    });
+      setSidebarTitle(getUiText(state, "sidebar_sections"));
+      swapSidebarContent(archiveSidebar.renderButtons);
+    } else if (state.homebrewMode) {
+      setModeWord(getUiText(state, "mode_homebrew"), true);
+      setTopModeButton(getUiText(state, "mode_map"));
+      homebrewController.render();
+    } else if (state.heroesMode) {
+      setModeWord(getUiText(state, "mode_heroes"), true);
+      renderHeroes();
+    } else if (state.activeMapMode) {
+      setModeWord(getUiText(state, "mode_active_map"), true);
+      setTopModeButton(getUiText(state, "mode_timeline"));
+      setSidebarTitle(getUiText(state, "sidebar_active"));
+      swapSidebarContent(activeMapApi.renderButtons);
+    } else {
+      setModeWord(getUiText(state, "mode_map"), true);
+      setTopModeButton(getUiText(state, "mode_timeline"));
+      setSidebarTitle(getUiText(state, "sidebar_layers"));
+      swapSidebarContent(renderMapSidebarButtons);
+    }
+
+    refreshTopbarActionButtons();
   }
 
-  function setupPanelImageInteractions() {
-    const commitCurrentMarkerImage = () => {
-      if (!state.editMode || !state.currentMarker) return;
-      state.currentMarker.imageUrl = els.panelImageUrlInput.value.trim();
-      state.currentMarker.imageText = els.panelImageCaption.textContent.trim();
-      recordChange("marker", state.currentMarker.id, state.currentMarker);
-      updatePanelImageView(state.currentMarker);
-    };
-
-    els.applyImageUrlButton.addEventListener("click", commitCurrentMarkerImage);
-
-    els.panelImageUrlInput.addEventListener("keydown", (event) => {
-      if (event.key !== "Enter") return;
-      event.preventDefault();
-      commitCurrentMarkerImage();
-    });
-
-    const applyFile = async (file) => {
-      if (!file || !state.editMode || !state.currentMarker) return;
-      if (!file.type.startsWith("image/")) return;
-      try {
-        const dataUrl = await readFileToDataUrl(file);
-        els.panelImageUrlInput.value = dataUrl;
-        state.currentMarker.imageAssetSuggestedPath = getSuggestedAssetPath(file.name);
-        els.panelImageHint.textContent = `Файл вставлен как data URL. Рекомендуемый путь ассета: ${state.currentMarker.imageAssetSuggestedPath}`;
-        commitCurrentMarkerImage();
-      } catch (error) {
-        console.error(error);
-      }
-    };
-
-    els.panelImageFileInput.addEventListener("change", async (event) => {
-      const [file] = Array.from(event.target.files || []);
-      await applyFile(file);
-      els.panelImageFileInput.value = "";
-    });
-
-    els.panelImage.addEventListener("dragover", (event) => {
-      if (!state.editMode) return;
-      event.preventDefault();
-      els.panelImage.classList.add("is-drop-target");
-    });
-    els.panelImage.addEventListener("dragleave", () => {
-      els.panelImage.classList.remove("is-drop-target");
-    });
-    els.panelImage.addEventListener("drop", async (event) => {
-      if (!state.editMode) return;
-      event.preventDefault();
-      els.panelImage.classList.remove("is-drop-target");
-      const [file] = Array.from(event.dataTransfer?.files || []);
-      await applyFile(file);
-    });
+  mapControls.setupViewSwitcher();
+  mapControls.setDisplayMode(state.mapViewMode || "author", { rerenderArchive: false });
+  setupPanelImageInteractions({
+    els,
+    state,
+    readFileToDataUrl,
+    getSuggestedAssetPath,
+    getChangeRecorder: () => changeRecorder,
+  });
+  mapTextToolbar.setup();
+  mapControls.setupDrawBrushPalette();
+  paletteController.setup();
+  sidebarLegend.setup();
+  searchController.setup();
+  dataQualityController.setup();
+  playerSidebar.setup();
+  timelineActs.setup();
+  const timelineToolbarActions = els.timelineActsBar?.parentElement;
+  if (timelineToolbarActions && els.editTimelineActButton && els.editTimelineActButton.parentElement !== timelineToolbarActions) {
+    timelineToolbarActions.appendChild(els.editTimelineActButton);
   }
-
-  function setupMapViewSwitcher() {
-    if (!els.mapViewSwitcher) return;
-    els.mapViewSwitcher.addEventListener("click", (event) => {
-      const button = event.target.closest("[data-map-view]");
-      if (!button) return;
-      setMapDisplayMode(button.dataset.mapView);
-    });
+  if (timelineToolbarActions && els.deleteTimelineActButton && els.deleteTimelineActButton.parentElement !== timelineToolbarActions) {
+    timelineToolbarActions.appendChild(els.deleteTimelineActButton);
   }
-
-  function setupMapTextToolbarInteractions() {
-    els.mapTextFontSelect.addEventListener("change", () => {
-      mapEditorCallbacks.onTextStyleChange({ fontFamily: els.mapTextFontSelect.value });
-    });
-    els.mapTextSizeInput.addEventListener("input", () => {
-      mapEditorCallbacks.onTextStyleChange({ fontSize: Number(els.mapTextSizeInput.value) || 36 });
-    });
-    els.mapTextColorInput.addEventListener("input", () => {
-      mapEditorCallbacks.onTextStyleChange({ color: els.mapTextColorInput.value });
-    });
-    els.mapTextRotateInput.addEventListener("input", () => {
-      mapEditorCallbacks.onTextStyleChange({ rotation: Number(els.mapTextRotateInput.value) || 0 });
-    });
-    els.mapTextXInput.addEventListener("input", () => {
-      mapEditorCallbacks.onTextStyleChange({ x: Number(els.mapTextXInput.value) || 0 });
-    });
-    els.mapTextYInput.addEventListener("input", () => {
-      mapEditorCallbacks.onTextStyleChange({ y: Number(els.mapTextYInput.value) || 0 });
-    });
-    els.mapTextBoldButton.addEventListener("click", () => {
-      const next = !els.mapTextBoldButton.classList.contains("active");
-      els.mapTextBoldButton.classList.toggle("active", next);
-      mapEditorCallbacks.onTextStyleChange({ bold: next });
-    });
-    els.mapTextItalicButton.addEventListener("click", () => {
-      const next = !els.mapTextItalicButton.classList.contains("active");
-      els.mapTextItalicButton.classList.toggle("active", next);
-      mapEditorCallbacks.onTextStyleChange({ italic: next });
-    });
-
-    els.drawBrushColorSelect.addEventListener("change", () => {
-      mapEditorCallbacks.onBrushChange({ color: els.drawBrushColorSelect.value });
-    });
-    els.drawBrushSizeInput.addEventListener("input", () => {
-      mapEditorCallbacks.onBrushChange({ size: Number(els.drawBrushSizeInput.value) || 2 });
-    });
-
-    document.addEventListener("click", (event) => {
-      if (els.mapTextToolbar.hidden) return;
-      if (els.mapTextToolbar.contains(event.target)) return;
-      if (event.target.closest(".region-label")) return;
-      closeMapTextToolbar();
-    });
-  }
-
-  function setupDrawBrushPalette() {
-    const paletteOptions = [
-      { value: "#7dd3fc", label: "Ледяной" },
-      { value: "#60a5fa", label: "Синий" },
-      { value: "#fca5a5", label: "Алый" },
-      { value: "#fbbf24", label: "Золотой" },
-      { value: "#86efac", label: "Зелёный" },
-      { value: "#c4b5fd", label: "Фиалковый" },
-      { value: "#f9fafb", label: "Светлый" },
-    ];
-    els.drawBrushColorSelect.innerHTML = "";
-    paletteOptions.forEach((entry) => {
-      const option = document.createElement("option");
-      option.value = entry.value;
-      option.textContent = entry.label;
-      els.drawBrushColorSelect.appendChild(option);
-    });
-    els.drawBrushColorSelect.value = state.drawBrushColor || paletteOptions[0].value;
-    els.drawBrushSizeInput.value = String(state.drawBrushSize || 2);
-  }
-
-  function setupPaletteEditorInteractions() {
-    els.addPaletteButton.addEventListener("click", (event) => {
-      event.stopPropagation();
-      createCustomPaletteFromCurrent();
-    });
-  }
-
-  setupMapViewSwitcher();
-  setMapDisplayMode(state.mapViewMode || "author", { rerenderArchive: false });
-  setupPanelImageInteractions();
-  setupMapTextToolbarInteractions();
-  setupDrawBrushPalette();
-  setupPaletteEditorInteractions();
-  setupEditorActionButtons();
-  setupInlineEditingInteractions();
+  editorActions.setupButtons();
+  setupInlineEditingInteractions({
+    els,
+    state,
+    readFileToDataUrl,
+    getChangeRecorder: () => changeRecorder,
+    getArchiveShortLabel,
+    renderTimeline,
+    renderArchive,
+    remapArchiveItemReferences,
+    renderTimelineSidebarButtons: timelineSidebar.renderButtons,
+    syncTimelineTrackAlignment,
+  });
+  setupHeroInteractions({
+    els,
+    state,
+    readFileToDataUrl,
+    getChangeRecorder: () => changeRecorder,
+    remapHeroReferences,
+    renderHeroes,
+  });
+  els.timelineContainer.addEventListener("click", (event) => {
+    const item = event.target.closest(".timeline-event-item");
+    const eventId = item?.dataset?.eventId || event.target.closest(".event-card")?.dataset?.eventId;
+    if (!eventId) return;
+    const timelineEvent = state.eventsData.find((entry) => entry.id === eventId);
+    if (!timelineEvent) return;
+    state.currentTimelineEventId = eventId;
+    state.currentTimelineEvent = timelineEvent;
+    playerSidebar.setPlayerTarget({ type: "timeline", id: eventId });
+    updateTimelineCurrentSelection();
+    panelDetails.updateFromTimelineEvent(timelineEvent);
+  });
+  window.addEventListener("resize", () => {
+    if (state.timelineMode) requestAnimationFrame(syncTimelineTrackAlignment);
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    if (isTypingTarget(event.target)) return;
+    if (handleEscape()) event.preventDefault();
+  });
 
   return {
+    setActiveMapController,
+    setHomebrewController,
     setSidebarRenderers,
     setupMapEditorCallbacks,
     setChangeRecorder,
     setPalette,
     togglePalettePopover,
+    toggleSidebarLegend: sidebarLegend.toggle,
+    closeSidebarLegend: sidebarLegend.close,
+    setTopbarSync,
     togglePanel,
     setModeWord,
-    setMapDisplayMode,
+    refreshEditorActionButtons,
+    refreshTopbarActionButtons,
+    renderMapViewSwitcher: mapControls.renderViewSwitcher,
+    setMapDisplayMode: mapControls.setDisplayMode,
     openTimelineMode,
     openArchiveMode,
+    openHomebrewMode,
     openMapMode,
+    openHeroesMode,
+    openActiveMapMode,
+    handleEscape,
     openMapTextToolbar,
     closeMapTextToolbar,
     setMapEditorControlsVisible,
-    updatePanelFromMarker,
-    setPanelEditable,
-    savePanelToCurrentMarker,
+    updatePanelFromMarker: panelDetails.updateFromMarker,
+    updatePanelFromActiveMarker: (marker) => panelDetails.updateFromMarker(marker, { entity: "activeMarker" }),
+    updatePanelFromTimelineEvent: panelDetails.updateFromTimelineEvent,
+    setPanelEditable: panelDetails.setEditable,
+    savePanelToCurrentMarker: panelDetails.saveCurrentMarker,
     renderTimeline,
     renderArchive,
+    renderHomebrew: () => homebrewController.render(),
+    renderHeroes,
+    renderActiveMap: () => activeMapApi.render(),
+    rerenderCurrentMode,
+    remapArchiveItemReferences,
+    remapHeroReferences,
   };
 }

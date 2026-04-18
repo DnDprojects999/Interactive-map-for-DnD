@@ -1,12 +1,17 @@
 import { clamp } from "./state.js";
+import { getMapViewTextureKey } from "./mapViews.js";
 
 export function createMapModule(els, state, ui) {
   const FALLBACK_MIN_MAP_SCALE = 0.6;
   const BASE_IMAGE_MIN_MAP_SCALE = 1;
   const MAX_MAP_SCALE = 4;
+  const MAP_INTERACTIVE_TARGETS = ".marker, .active-map-marker, .region-label, .active-route-hit, .active-route-line";
 
+  // If the current map mode has a real texture, we keep the user from zooming
+  // out far enough to expose empty space around the image.
   function hasBaseMapImage() {
-    return Boolean(els.mapTransform.querySelector("#mapBaseImage, .map-base-image"));
+    const textureKey = getMapViewTextureKey(state.worldData, state.mapViewMode);
+    return Boolean(state.mapTextureByType?.[textureKey]?.trim?.());
   }
 
   function getMinMapScale() {
@@ -30,6 +35,8 @@ export function createMapModule(els, state, ui) {
   }
 
   function applyMapTransform() {
+    // All overlays sit inside the same transformed layer, so one transform keeps
+    // map art, labels, markers, and active-map elements visually aligned.
     state.mapScale = clamp(state.mapScale, getMinMapScale(), MAX_MAP_SCALE);
     constrainMapOffsetToImageBounds();
     els.mapTransform.style.transform = `translate(${state.mapOffsetX}px, ${state.mapOffsetY}px) scale(${state.mapScale})`;
@@ -49,6 +56,8 @@ export function createMapModule(els, state, ui) {
 
       // "World" координаты нужны, чтобы масштабирование происходило относительно курсора,
       // а не геометрического центра контейнера.
+      // Convert the pointer into "world" coordinates first so zooming feels
+      // anchored under the cursor instead of around the container center.
       const worldX = (mouseX - state.mapOffsetX) / state.mapScale;
       const worldY = (mouseY - state.mapOffsetY) / state.mapScale;
 
@@ -64,6 +73,14 @@ export function createMapModule(els, state, ui) {
       if (event.button === 2) event.preventDefault();
       const isMarker = event.target.classList.contains("marker");
       if (isMarker) return;
+      const interactiveTarget = event.target.closest(MAP_INTERACTIVE_TARGETS);
+      const routeDrawingPointer =
+        state.activeMapMode
+        && state.editMode
+        && state.activeMapTool === "route"
+        && event.button === 0
+        && !interactiveTarget;
+      if (routeDrawingPointer) return;
 
       if (state.editMode && event.button === 0 && event.target !== els.mapStage && event.target !== els.mapTransform) {
         return;
@@ -101,6 +118,8 @@ export function createMapModule(els, state, ui) {
   }
 
   function getMapPercentFromClient(clientX, clientY) {
+    // Positions are stored in percentages so markers stay stable across screen
+    // sizes, zoom levels, and responsive layout changes.
     // Метки сохраняются в процентах: это делает их устойчивыми к адаптивной вёрстке и разным разрешениям.
     const rect = els.mapStage.getBoundingClientRect();
     const x = clamp(((clientX - rect.left - state.mapOffsetX) / (rect.width * state.mapScale)) * 100, 0, 100);

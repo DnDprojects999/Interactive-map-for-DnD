@@ -5,35 +5,65 @@
       "name": "Города",
       "short": "Г",
       "color": "#38bdf8",
-      "enabled": true
+      "enabled": true,
+      "translations": {
+        "en": {
+          "name": "Cities",
+          "short": "C"
+        }
+      }
     },
     {
       "id": "capitals",
       "name": "Столицы",
       "short": "С",
       "color": "#ef4444",
-      "enabled": true
+      "enabled": true,
+      "translations": {
+        "en": {
+          "name": "Capitals",
+          "short": "K"
+        }
+      }
     },
     {
       "id": "ruins",
       "name": "Руины",
       "short": "Р",
       "color": "#f59e0b",
-      "enabled": true
+      "enabled": true,
+      "translations": {
+        "en": {
+          "name": "Ruins",
+          "short": "R"
+        }
+      }
     },
     {
       "id": "factions",
       "name": "Фракции",
       "short": "Ф",
       "color": "#a78bfa",
-      "enabled": true
+      "enabled": true,
+      "translations": {
+        "en": {
+          "name": "Factions",
+          "short": "F"
+        }
+      }
     },
     {
       "id": "quests",
       "name": "Квесты",
       "short": "К",
       "color": "#22c55e",
-      "enabled": true
+      "enabled": true,
+      "translations": {
+        "en": {
+          "name": "Quests",
+          "short": "Q"
+        }
+      }
     }
   ],
   "markers": [

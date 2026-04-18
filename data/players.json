@@ -1,0 +1,28 @@
+{
+  "players": [
+    {
+      "id": "dima",
+      "name": "Дима",
+      "label": "Игрок",
+      "notes": "Ведёт Золотого странника и чаще всего тащит дипломатию.",
+      "characters": [
+        {
+          "groupId": "first-party",
+          "id": "golden-drake"
+        }
+      ]
+    },
+    {
+      "id": "alisa",
+      "name": "Алиса",
+      "label": "Игрок",
+      "notes": "Следопыт и разведка партии.",
+      "characters": [
+        {
+          "groupId": "first-party",
+          "id": "ash-scout"
+        }
+      ]
+    }
+  ]
+}

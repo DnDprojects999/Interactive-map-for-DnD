@@ -20,7 +20,7 @@
         "type": "object",
         "required": ["entity", "op", "id"],
         "properties": {
-          "entity": { "enum": ["marker", "timelineEvent", "archiveGroup", "archiveItem", "regionLabel", "drawLayer"] },
+          "entity": { "enum": ["markerGroup", "marker", "timelineAct", "timelineEvent", "archiveGroup", "archiveItem", "heroGroup", "heroItem", "homebrewCategory", "homebrewArticle", "player", "worldInfo", "regionLabel", "drawLayer", "mapTexture"] },
           "op": { "enum": ["upsert", "remove"] },
           "id": { "type": "string", "minLength": 1 },
           "groupId": { "type": "string" },

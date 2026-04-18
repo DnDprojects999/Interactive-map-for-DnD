@@ -1,56 +1,81 @@
 import { clamp } from "./state.js";
+import { getLocalizedText } from "./localization.js";
+import { createMapTextureController } from "./editor/mapTextureController.js";
+import {
+  resolveFactionMarkerSymbolLabel,
+  resolveFactionMarkerSymbolUrl,
+} from "./factionSymbols.js";
+import {
+  normalizeActiveMapData,
+  patchActiveMapData,
+} from "./activeMapState.js";
 
+// Main map editor coordinator: marker layers, region labels, draw layers,
+// Active Map pinning, and edit-mode access rules all meet here.
 export function createEditorModule(els, state, ui, mapModule, changesManager) {
-  const mapTextureObjectUrls = {
-    author: null,
-    interactive: null,
-  };
+  const EDITOR_ACCESS_STORAGE_KEY = "serkonia:editor-access";
 
   if (!state.mapTextureByType || typeof state.mapTextureByType !== "object") {
-    state.mapTextureByType = { author: "", interactive: "" };
+    state.mapTextureByType = {};
   }
 
-  function resolveTextureKeyByMode(mode = state.mapViewMode) {
-    return mode === "author" ? "author" : "interactive";
+  function hasEditorAccess() {
+    // Localhost is always trusted for convenience; deployed builds need either
+    // ?editor=1 or an already granted localStorage flag.
+    try {
+      const hostname = window.location.hostname;
+      const isLocalHost = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+      if (isLocalHost) return true;
+
+      const searchParams = new URLSearchParams(window.location.search);
+      const accessGrantedByQuery = searchParams.get("editor") === "1";
+      if (accessGrantedByQuery) {
+        window.localStorage?.setItem(EDITOR_ACCESS_STORAGE_KEY, "granted");
+      }
+      return accessGrantedByQuery || window.localStorage?.getItem(EDITOR_ACCESS_STORAGE_KEY) === "granted";
+    } catch (error) {
+      return false;
+    }
   }
 
-  function applyMapTexture(source) {
-    els.mapPhotoLayer.style.setProperty("--map-photo-image", source ? `url("${source}")` : "none");
+  function readFileToDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("Не удалось прочитать файл текстуры карты."));
+      reader.readAsDataURL(file);
+    });
   }
 
+  const mapTextureController = createMapTextureController({
+    els,
+    state,
+    changesManager,
+    readFileToDataUrl,
+  });
   function updateMapTextureButtonLabel() {
-    const textureKey = resolveTextureKeyByMode();
-    els.uploadMapTextureButton.textContent = textureKey === "author"
-      ? "Загрузить авторскую карту"
-      : "Загрузить интерактивную карту";
+    mapTextureController.updateMapTextureButtonLabel();
   }
 
   function applyTextureForCurrentMapMode() {
-    const textureKey = resolveTextureKeyByMode();
-    applyMapTexture(state.mapTextureByType?.[textureKey] || "");
+    mapTextureController.applyTextureForCurrentMapMode();
   }
 
-  function handleMapTextureSelection(file) {
-    if (!file) return;
-    if (!file.type.startsWith("image/")) return;
+  async function handleMapTextureSelection(file) {
+    await mapTextureController.handleMapTextureSelection(file);
+  }
 
-    const textureKey = resolveTextureKeyByMode();
-    if (mapTextureObjectUrls[textureKey]) URL.revokeObjectURL(mapTextureObjectUrls[textureKey]);
+  function updateMapTextureButtonLabelOverride() {
+    mapTextureController.updateMapTextureButtonLabel();
+  }
 
-    mapTextureObjectUrls[textureKey] = URL.createObjectURL(file);
-    state.mapTextureByType[textureKey] = mapTextureObjectUrls[textureKey];
-    applyTextureForCurrentMapMode();
-
-    const mapModeLabel = textureKey === "author" ? "авторского" : "интерактивного";
-    els.panelSubtitle.textContent = `Фон ${mapModeLabel} режима обновлён: ${file.name}`;
-    els.panelText.textContent = textureKey === "author"
-      ? "Изображение сохранено в группу авторских карт и показывается только в авторском режиме."
-      : "Изображение сохранено в группу интерактивных карт и показывается в обоих интерактивных режимах.";
+  async function handleMapTextureSelectionOverride(file) {
+    await mapTextureController.handleMapTextureSelection(file);
   }
 
   /**
-   * Подсвечивает кнопку слоя, выбранного как "цель редактирования".
-   * В обычном режиме (не edit-mode) кнопки работают как фильтры видимости.
+   * В обычном режиме кнопки слева управляют видимостью слоёв карты.
+   * В edit-mode те же кнопки выбирают группу или слой рисования для редактирования.
    */
   function refreshGroupButtonsSelection() {
     const buttons = els.toolButtonsContainer.querySelectorAll(".tool-btn");
@@ -66,21 +91,108 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
     });
   }
 
+  function getPinnedActiveMarkerIds() {
+    return new Set(normalizeActiveMapData(state.activeMapData).pinnedMarkerIds);
+  }
+
+  function updateActiveMapData(patch) {
+    // Active map state is patched through one helper so timestamp/meta updates
+    // stay consistent with other active-map mutations.
+    state.activeMapData = patchActiveMapData(state.activeMapData, patch);
+  }
+
+  function setPanelFacts(fact1 = "", fact2 = "", fact3 = "") {
+    els.fact1.textContent = fact1;
+    els.fact2.textContent = fact2;
+    els.fact3.textContent = fact3;
+  }
+
+  function showEditorStatus(subtitle, text, facts = []) {
+    els.panelSubtitle.textContent = subtitle;
+    els.panelText.textContent = text;
+    setPanelFacts(facts[0] || "", facts[1] || "", facts[2] || "");
+  }
+
+  function rerenderCurrentMode() {
+    // Editor changes can affect multiple fullscreen modes, so this helper
+    // refreshes only the one currently visible to the user.
+    renderMarkers();
+    if (state.timelineMode) ui.renderTimeline();
+    if (state.archiveMode) ui.renderArchive();
+    if (state.heroesMode) ui.renderHeroes();
+    if (state.activeMapMode) ui.renderActiveMap();
+  }
+
+  function createDefaultMarker(x, y) {
+    return {
+      id: "marker-" + Date.now(),
+      group: state.editorGroupId || state.groupsData[0]?.id || "cities",
+      title: "Новая метка",
+      type: "Новый тип",
+      x,
+      y,
+      imageUrl: "",
+      imageText: "Добавь подпись для иллюстрации в панели справа.",
+      description: "Добавь описание в правой панели.",
+      facts: ["Факт 1", "Факт 2", "Факт 3"],
+    };
+  }
+
+  function togglePinnedMarker(marker) {
+    const pinnedMarkers = getPinnedActiveMarkerIds();
+    const nextPinned = !pinnedMarkers.has(marker.id);
+    const nextPinnedList = nextPinned
+      ? Array.from(new Set([...pinnedMarkers, marker.id]))
+      : normalizeActiveMapData(state.activeMapData).pinnedMarkerIds.filter((entry) => entry !== marker.id);
+
+    updateActiveMapData({ pinnedMarkerIds: nextPinnedList });
+    renderMarkers();
+    ui.renderActiveMap();
+    showEditorStatus(
+      nextPinned
+        ? "Метка закреплена на Active Map"
+        : "Метка убрана с Active Map",
+      "Alt + клик по обычной метке закрепляет её на Active Map или убирает обратно.",
+    );
+  }
+
+  function removeActiveMarkerFromState(markerId) {
+    const activeMapData = normalizeActiveMapData(state.activeMapData);
+    updateActiveMapData({
+      markers: activeMapData.markers.filter((marker) => marker.id !== markerId),
+      pinnedMarkerIds: activeMapData.pinnedMarkerIds.filter((entry) => entry !== markerId),
+    });
+  }
+
   function renderGroups() {
     els.toolButtonsContainer.innerHTML = "";
 
     state.groupsData.forEach((group) => {
+      const localizedName = getLocalizedText(group, "name", state, group.name || "Слой карты");
+      const localizedShort = getLocalizedText(group, "short", state, group.short || "?");
       const button = document.createElement("button");
       button.className = `tool-btn ${group.enabled ? "active" : ""}`;
       button.dataset.group = group.id;
-      button.dataset.label = group.name;
-      button.textContent = group.short || "?";
+      button.dataset.groupId = group.id;
+      button.dataset.label = localizedName;
+      button.dataset.badge = localizedShort;
+      button.dataset.color = group.color || "";
+      if (group.color) button.style.setProperty("--tool-accent", group.color);
+      button.textContent = localizedShort;
+      button.title = localizedName || "Слой карты";
+      button.title = group.name || "Слой карты";
 
+      button.title = localizedName || "Слой карты";
+      button.dataset.label = localizedName || "Слой карты";
+      button.dataset.badge = localizedShort || "?";
+      button.title = localizedName || "Слой карты";
       button.addEventListener("click", () => {
         if (state.editMode) {
           state.editorGroupId = group.id;
           refreshGroupButtonsSelection();
-          els.panelSubtitle.textContent = `Режим редактирования · выбран слой: ${group.name}`;
+          els.panelSubtitle.textContent = "Режим редактирования · выбран слой: " + group.name;
+          els.panelSubtitle.textContent = "Выбран слой: " + localizedName;
+          els.panelSubtitle.textContent = "Выбран слой: " + (localizedName || "Слой карты");
           return;
         }
 
@@ -96,7 +208,15 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
 
     const labelsButton = document.createElement("button");
     labelsButton.className = `tool-btn ${state.regionLabelsVisible ? "active" : ""}`;
-    labelsButton.title = state.editMode ? "Режим редактирования подписей территорий" : "Показать/скрыть подписи территорий";
+    labelsButton.style.setProperty("--tool-accent", "rgba(226,232,240,.42)");
+    labelsButton.dataset.badge = "Т";
+    labelsButton.dataset.label = "Подписи территорий";
+    labelsButton.dataset.label = "Подписи территорий";
+    labelsButton.title = state.editMode ? "Режим редактирования подписей территорий" : "Показать или скрыть подписи территорий";
+    labelsButton.textContent = "Т";
+    labelsButton.dataset.badge = "Т";
+    labelsButton.dataset.label = "Подписи территорий";
+    labelsButton.title = state.editMode ? "Редактирование подписей территорий" : "Показать или скрыть подписи территорий";
     labelsButton.textContent = "Т";
     labelsButton.addEventListener("click", () => {
       if (state.editMode) {
@@ -119,14 +239,20 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
       const layerButton = document.createElement("button");
       layerButton.className = `tool-btn ${layer.visible !== false ? "active" : ""}`;
       layerButton.dataset.drawLayerId = layer.id;
-      layerButton.title = layer.name || `Слой ${index + 1}`;
-      layerButton.textContent = "◻";
+      layerButton.dataset.badge = "●";
+      layerButton.dataset.label = layer.name || ("Слой " + (index + 1));
+      layerButton.title = layer.name || ("Слой " + (index + 1));
+      layerButton.textContent = "\u25cf";
+      layerButton.dataset.badge = "●";
+      layerButton.dataset.label = layer.name || ("Слой " + (index + 1));
+      layerButton.title = layer.name || ("Слой " + (index + 1));
       layerButton.addEventListener("click", () => {
         if (state.editMode) {
           state.activeDrawLayerId = layer.id;
           state.drawMode = true;
           ui.setMapEditorControlsVisible(true, true);
-          els.panelSubtitle.textContent = `Выбран слой рисования: ${layer.name || `Слой ${index + 1}`}`;
+          els.panelSubtitle.textContent = "Выбран слой рисования: " + (layer.name || ("Слой " + (index + 1)));
+          els.panelSubtitle.textContent = "Выбран слой рисования: " + (layer.name || ("Слой " + (index + 1)));
           return;
         }
         layer.visible = layer.visible === false;
@@ -139,8 +265,12 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
     if (state.editMode) {
       const addLayerButton = document.createElement("button");
       addLayerButton.className = "tool-btn";
+      addLayerButton.dataset.badge = "+";
+      addLayerButton.dataset.label = "Новый слой рисования";
       addLayerButton.title = "Новый слой рисования";
       addLayerButton.textContent = "+";
+      addLayerButton.dataset.label = "Новый слой рисования";
+      addLayerButton.title = "Новый слой рисования";
       addLayerButton.addEventListener("click", () => {
         createDrawLayer();
         renderGroups();
@@ -156,19 +286,48 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
     const markerEl = document.createElement("button");
     markerEl.className = "marker";
     markerEl.dataset.group = marker.group;
+    if (marker.id) markerEl.dataset.markerId = marker.id;
     markerEl.style.left = `${marker.x}%`;
     markerEl.style.top = `${marker.y}%`;
 
     const group = groupsById.get(marker.group);
     if (group?.color) markerEl.style.background = group.color;
-    if (group?.enabled === false) markerEl.classList.add("hidden");
+    const symbolUrl = resolveFactionMarkerSymbolUrl(state.archiveData, marker);
+    if (symbolUrl) {
+      markerEl.classList.add("marker-symbolic");
+      const symbol = document.createElement("img");
+      symbol.className = "marker-symbol-image";
+      symbol.src = symbolUrl;
+      symbol.alt = resolveFactionMarkerSymbolLabel(state.archiveData, marker);
+      symbol.loading = "lazy";
+      symbol.decoding = "async";
+      markerEl.appendChild(symbol);
+    }
+    const pinnedActiveMarkers = getPinnedActiveMarkerIds();
+    if (state.activeMapMode) {
+      const pinned = pinnedActiveMarkers.has(marker.id);
+      const visibleInActiveMode = state.activeMapShowAllMarkers || pinned;
+      if (!visibleInActiveMode) markerEl.classList.add("hidden");
+      markerEl.classList.toggle("active-map-pinned", pinned);
+      markerEl.classList.toggle("active-map-preview", state.activeMapShowAllMarkers && !pinned);
+    } else if (!state.editMode && group?.enabled === false) {
+      markerEl.classList.add("hidden");
+    }
     const nameEl = document.createElement("span");
     nameEl.className = "marker-name";
     nameEl.textContent = marker.title || "Метка";
     markerEl.appendChild(nameEl);
+    nameEl.textContent = getLocalizedText(marker, "title", state, "Метка");
+    nameEl.textContent = getLocalizedText(marker, "title", state, "Метка");
+
+    nameEl.textContent = getLocalizedText(marker, "title", state, "Метка");
 
     markerEl.addEventListener("click", (event) => {
       if (state.editMode && event.altKey) {
+        if (state.activeMapMode) {
+          togglePinnedMarker(marker);
+          return;
+        }
         state.markersData = state.markersData.filter((m) => m !== marker);
         if (marker.id) changesManager.remove("marker", marker.id);
         renderMarkers();
@@ -185,8 +344,8 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
       event.stopPropagation();
       markerEl.setPointerCapture(event.pointerId);
 
-      // Во время drag сразу меняем и DOM-координаты, и данные модели,
-      // чтобы экспорт JSON отражал актуальное положение без отдельной синхронизации.
+      // Не используем drag через transform: маркер должен сразу двигаться в процентах карты.
+      // Так координаты сохраняются в JSON без пересчёта из DOM-пикселей.
       const dragMove = (moveEvent) => {
         const { x, y } = mapModule.getMapPercentFromClient(moveEvent.clientX, moveEvent.clientY);
         marker.x = x;
@@ -276,7 +435,7 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
       });
 
       const selectButton = document.createElement("button");
-      selectButton.textContent = state.activeDrawLayerId === layer.id ? "✓" : "●";
+      selectButton.textContent = state.activeDrawLayerId === layer.id ? "\u2713" : "\u25cf";
       selectButton.addEventListener("click", () => {
         state.activeDrawLayerId = layer.id;
         renderGroups();
@@ -284,7 +443,7 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
       });
 
       const upButton = document.createElement("button");
-      upButton.textContent = "↑";
+      upButton.textContent = "\u2191";
       upButton.disabled = index === 0;
       upButton.addEventListener("click", () => {
         if (index === 0) return;
@@ -299,7 +458,7 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
       });
 
       const downButton = document.createElement("button");
-      downButton.textContent = "↓";
+      downButton.textContent = "\u2193";
       downButton.disabled = index === sortedLayers.length - 1;
       downButton.addEventListener("click", () => {
         if (index === sortedLayers.length - 1) return;
@@ -314,7 +473,7 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
       });
 
       const deleteButton = document.createElement("button");
-      deleteButton.textContent = "✕";
+      deleteButton.textContent = "\u2715";
       deleteButton.addEventListener("click", () => {
         state.drawLayersData = state.drawLayersData.filter((entry) => entry.id !== layer.id);
         changesManager.remove("drawLayer", layer.id);
@@ -331,7 +490,7 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
 
   function renderRegionLabels() {
     els.regionLabelsContainer.innerHTML = "";
-    if (!state.regionLabelsVisible || state.mapViewMode === "author") return;
+    if (!state.regionLabelsVisible && !state.editMode) return;
     state.regionLabelsData.forEach((label) => {
       const el = document.createElement("div");
       el.className = "region-label";
@@ -344,7 +503,10 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
       el.style.fontStyle = label.italic ? "italic" : "normal";
       el.style.color = label.color || "#dbeafe";
       el.style.transform = `translate(-50%, -50%) rotate(${label.rotation || 0}deg)`;
+      el.textContent = getLocalizedText(label, "text", state, label.text || "Новая подпись");
       el.textContent = label.text || "Новая подпись";
+      el.textContent = getLocalizedText(label, "text", state, label.text || "Новая подпись");
+      el.textContent = getLocalizedText(label, "text", state, label.text || "Новая подпись");
       const textEditable = state.editMode && state.regionTextMode && !state.regionTextMoveMode;
       el.contentEditable = String(textEditable);
       el.classList.toggle("text-editable", textEditable);
@@ -391,6 +553,8 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
       bold: false,
       italic: false,
     };
+    label.text = "Новая область";
+    label.text = "Новая область";
     state.regionLabelsData.push(label);
     state.currentRegionLabel = label;
     state.regionTextMode = true;
@@ -414,12 +578,20 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
     els.markersContainer.innerHTML = "";
     const groupsById = new Map(state.groupsData.map((group) => [group.id, group]));
     const fragment = document.createDocumentFragment();
-    state.markersData.forEach((marker) => fragment.appendChild(createMarkerElement(marker, groupsById)));
+    state.markersData.forEach((marker) => {
+      if (state.activeMapMode) {
+        const pinnedActiveMarkers = getPinnedActiveMarkerIds();
+        if (!state.activeMapShowAllMarkers && !pinnedActiveMarkers.has(marker.id)) return;
+      }
+      fragment.appendChild(createMarkerElement(marker, groupsById));
+    });
     els.markersContainer.appendChild(fragment);
   }
 
   function toggleEditMode(force) {
-    state.editMode = typeof force === "boolean" ? force : !state.editMode;
+    const nextEditMode = typeof force === "boolean" ? force : !state.editMode;
+    if (nextEditMode && !hasEditorAccess()) return;
+    state.editMode = nextEditMode;
     document.body.classList.toggle("edit-mode", state.editMode);
 
     if (!state.editorGroupId && state.groupsData.length > 0) {
@@ -430,36 +602,62 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
       state.regionTextMoveMode = false;
     }
 
-    els.exportDataButton.hidden = !state.editMode;
-    els.uploadMapTextureButton.hidden = !state.editMode;
-    updateMapTextureButtonLabel();
+    mapTextureController.updateMapTextureButtonLabel();
     els.deleteMarkerButton.hidden = !state.editMode;
     els.addPaletteButton.hidden = !state.editMode;
     ui.setPanelEditable(state.editMode);
-    ui.setMapEditorControlsVisible(state.editMode && !state.timelineMode && !state.archiveMode, state.drawMode);
+    ui.refreshTopbarActionButtons();
+    document.dispatchEvent(new CustomEvent("serkonia:edit-mode-changed"));
+    ui.setMapEditorControlsVisible(state.editMode && !state.timelineMode && !state.archiveMode && !state.heroesMode && !state.activeMapMode, state.drawMode);
     if (!state.editMode) {
       state.drawMode = false;
       ui.closeMapTextToolbar();
     }
-    renderGroups();
+    if (!state.activeMapMode) renderGroups();
+    rerenderCurrentMode();
+    if (state.activeMapMode) ui.openActiveMapMode();
     renderDrawLayerPanel();
-    applyTextureForCurrentMapMode();
+    mapTextureController.applyTextureForCurrentMapMode();
     refreshGroupButtonsSelection();
 
     if (state.editMode) {
-      els.panelSubtitle.textContent = "Режим редактирования включён";
-      els.panelText.textContent =
-        "Клик по карте: новая метка · Alt+клик по метке: удалить · подписи территорий: кнопка «↔ Перемещение текста» включает перетаскивание.";
+      if (state.activeMapMode) {
+        els.panelSubtitle.textContent = "Редактирование Active Map включено";
+        els.panelText.textContent =
+          "Клик по карте создаёт активное событие. Кнопка Маршрут включает рисование следов партии, а Alt + клик по обычной метке закрепляет её на Active Map.";
+      } else {
+        els.panelSubtitle.textContent = "Режим редактирования включён";
+        els.panelText.textContent =
+          "Клик по карте: новая метка \u00b7 Alt+клик по метке: удалить \u00b7 подписи территорий: кнопка \"\u2194 Перемещение текста\" включает перетаскивание.";
+      }
     }
   }
 
   function exportWorldChangesJson() {
-    // Экспортируем единый overlay-файл изменений для всех доменов редактора.
-    changesManager.download("world-changes.json");
+    // Экспортирует основной overlay мира. Active Map сохраняется отдельно в active-map.json.
+    changesManager.download("changes.json");
   }
 
   function deleteCurrentMarker() {
     if (!state.editMode || !state.currentMarker) return;
+    if (state.currentPanelEntity?.entity === "activeMarker") {
+      removeActiveMarkerFromState(state.currentMarker.id);
+      state.currentMarker = null;
+      state.currentPanelEntity = { entity: "marker" };
+      ui.renderActiveMap();
+      els.panelTitle.textContent = "Активное событие удалено";
+      showEditorStatus(
+        "Редактор Active Map",
+        "Активное событие удалено с карты. Новый активный маркер можно создать кликом по карте в режиме редактирования Active Map.",
+        [
+          "Alt + клик по обычной метке закрепляет её на Active Map",
+          "Новые активные события создаются кликом по карте в режиме редактирования",
+          "Изменения сохраняются в active-map.json",
+        ],
+      );
+      return;
+    }
+
     const markerToDelete = state.currentMarker;
     state.markersData = state.markersData.filter((marker) => marker !== markerToDelete);
     if (markerToDelete.id) changesManager.remove("marker", markerToDelete.id);
@@ -467,10 +665,10 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
     renderMarkers();
     els.panelTitle.textContent = "Метка удалена";
     els.panelSubtitle.textContent = "Редактор карты";
-    els.panelText.textContent = "Выбери другую метку или создай новую кликом по карте.";
-    els.fact1.textContent = "Alt + клик по метке — быстрое удаление";
-    els.fact2.textContent = "Кнопка «Удалить метку» удаляет выбранную";
-    els.fact3.textContent = "Изменение попадёт в экспорт JSON";
+    els.panelText.textContent = "Создай новую метку кликом по карте в режиме редактирования или выбери другую метку на карте.";
+    els.fact1.textContent = "Alt + клик по метке быстро удаляет её";
+    els.fact2.textContent = "Перетаскивание меняет положение метки на карте";
+    els.fact3.textContent = "Изменения обычных меток попадают в changes.json";
   }
 
   function setupEditorInteractions() {
@@ -480,22 +678,22 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
     renderDrawLayers();
     renderRegionLabels();
     renderDrawLayerPanel();
-    applyTextureForCurrentMapMode();
-    updateMapTextureButtonLabel();
+    mapTextureController.applyTextureForCurrentMapMode();
+    mapTextureController.updateMapTextureButtonLabel();
     ui.setupMapEditorCallbacks({
       onCreateRegionLabel: () => createRegionLabel(),
       onToggleTextMoveMode: () => {
         state.regionTextMode = true;
         state.regionTextMoveMode = !state.regionTextMoveMode;
         renderRegionLabels();
-        ui.setMapEditorControlsVisible(state.editMode && !state.timelineMode && !state.archiveMode, state.drawMode);
+        ui.setMapEditorControlsVisible(state.editMode && !state.timelineMode && !state.archiveMode && !state.heroesMode && !state.activeMapMode, state.drawMode);
         els.panelSubtitle.textContent = state.regionTextMoveMode
-          ? "Режим перемещения подписей включён"
-          : "Режим редактирования текста включён";
+          ? "Перемещение подписей включено"
+          : "Редактирование подписей включено";
       },
       onToggleDrawMode: () => {
         state.drawMode = !state.drawMode;
-        ui.setMapEditorControlsVisible(state.editMode && !state.timelineMode && !state.archiveMode, state.drawMode);
+        ui.setMapEditorControlsVisible(state.editMode && !state.timelineMode && !state.archiveMode && !state.heroesMode && !state.activeMapMode, state.drawMode);
       },
       onTextStyleChange: (patch) => {
         if (!state.currentRegionLabel) return;
@@ -510,15 +708,16 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
         if (typeof size === "number") state.drawBrushSize = size;
       },
       onMapViewModeChange: () => {
-        applyTextureForCurrentMapMode();
-        updateMapTextureButtonLabel();
+        mapTextureController.applyTextureForCurrentMapMode();
+        mapTextureController.updateMapTextureButtonLabel();
         renderRegionLabels();
       },
     });
 
-    // Создание новой метки доступно только в edit-mode и только по свободному месту карты.
+    // Клики по карте для новых меток и рисования работают только в edit-mode, чтобы не мешать обычной навигации.
     els.mapStage.addEventListener("click", (event) => {
       if (!state.editMode) return;
+      if (state.activeMapMode) return;
       if (event.target.closest(".region-label")) return;
       if (state.drawMode) return;
       if (state.regionTextMode) return;
@@ -526,17 +725,19 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
 
       const { x, y } = mapModule.getMapPercentFromClient(event.clientX, event.clientY);
       const marker = {
-        id: `marker-${Date.now()}`,
-        group: state.editorGroupId || state.groupsData[0]?.id || "cities",
+        ...createDefaultMarker(x, y),
         title: "Новая метка",
         type: "Новый тип",
-        x,
-        y,
-        imageUrl: "",
         imageText: "Добавь подпись для иллюстрации в панели справа.",
         description: "Добавь описание в правой панели.",
         facts: ["Факт 1", "Факт 2", "Факт 3"],
       };
+
+      marker.title = "Новая метка";
+      marker.type = "Новый тип";
+      marker.imageText = "Добавь подпись для иллюстрации в панели справа.";
+      marker.description = "Добавь описание в правой панели.";
+      marker.facts = ["Факт 1", "Факт 2", "Факт 3"];
 
       state.markersData.push(marker);
       changesManager.upsert("marker", marker.id, marker);
@@ -546,6 +747,7 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
 
     els.mapStage.addEventListener("pointerdown", (event) => {
       if (!state.editMode || !state.drawMode) return;
+      if (state.activeMapMode) return;
       if (event.target.closest(".marker") || event.target.closest(".region-label")) return;
       const activeLayer = getActiveDrawLayer();
       if (!activeLayer) return;
@@ -563,6 +765,7 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
 
     els.mapStage.addEventListener("pointermove", (event) => {
       if (!state.editMode || !state.drawMode || !drawingStroke) return;
+      if (state.activeMapMode) return;
       drawingStroke.points.push(mapModule.getMapPercentFromClient(event.clientX, event.clientY));
       renderDrawLayers();
     });
@@ -640,23 +843,22 @@ export function createEditorModule(els, state, ui, mapModule, changesManager) {
 
     els.exportDataButton.addEventListener("click", exportWorldChangesJson);
     els.uploadMapTextureButton.addEventListener("click", () => els.mapTextureInput.click());
-    els.mapTextureInput.addEventListener("change", (event) => {
+    els.mapTextureInput.addEventListener("change", async (event) => {
       const [file] = event.target.files || [];
-      handleMapTextureSelection(file);
+      try {
+        await mapTextureController.handleMapTextureSelection(file);
+      } catch (error) {
+        console.error(error);
+      }
       event.target.value = "";
     });
 
     document.addEventListener("keydown", (event) => {
       if (event.ctrlKey && event.shiftKey && event.code === "Backquote") {
+        if (!hasEditorAccess()) return;
         event.preventDefault();
         toggleEditMode();
       }
-    });
-
-    window.addEventListener("beforeunload", () => {
-      Object.values(mapTextureObjectUrls).forEach((url) => {
-        if (url) URL.revokeObjectURL(url);
-      });
     });
   }
 

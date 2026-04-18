@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none">
+  <path d="M30 40H216" stroke="#FF9D14" stroke-width="16" stroke-linecap="round"/>
+  <path d="M40 56C40 42 51 31 65 31H226V79H65C51 79 40 68 40 56Z" fill="#FFF0B2"/>
+  <path d="M40 56C40 42 51 31 65 31H226V79H65C51 79 40 68 40 56Z" stroke="#050608" stroke-width="14" stroke-linejoin="round"/>
+  <path d="M80 56H198" stroke="#050608" stroke-width="10" stroke-linecap="round"/>
+  <path d="M40 128H205C221 128 234 141 234 157C234 173 221 186 205 186H40" fill="#FFF0B2"/>
+  <path d="M40 128H205C221 128 234 141 234 157C234 173 221 186 205 186H40" stroke="#8B6E4D" stroke-width="16" stroke-linejoin="round"/>
+  <path d="M82 157H184" stroke="#050608" stroke-width="10" stroke-linecap="round"/>
+  <path d="M197 157H204" stroke="#050608" stroke-width="10" stroke-linecap="round"/>
+  <path d="M28 198H174C190 198 203 211 203 227C203 243 190 256 174 256H28" transform="translate(0 -18)" fill="#FFF0B2"/>
+  <path d="M28 198H174C190 198 203 211 203 227C203 243 190 256 174 256H28" transform="translate(0 -18)" stroke="#6D563D" stroke-width="16" stroke-linejoin="round"/>
+  <path d="M78 209H162" stroke="#050608" stroke-width="10" stroke-linecap="round"/>
+  <path d="M176 181V229L196 215L216 229V181H176Z" fill="#FF5A2A"/>
+  <path d="M176 181V229L196 215L216 229V181H176Z" stroke="#050608" stroke-width="12" stroke-linejoin="round"/>
+</svg>
