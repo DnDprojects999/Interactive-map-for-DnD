@@ -1,4 +1,4 @@
-# Serkonia
+# Interactive map (working title "Serkonia")
 
 > A flexible worldbuilding and campaign hub for maps, timelines, archives, heroes, and homebrew content.
 
