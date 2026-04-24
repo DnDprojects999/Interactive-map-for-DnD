@@ -2,7 +2,7 @@
 
 > A flexible worldbuilding and campaign hub for maps, timelines, archives, heroes, and homebrew content.
 
-Serkonia is a static browser-based worldbuilding tool. It can be used as a personal setting wiki, a tabletop campaign hub, a lore portal for players, or a lightweight interactive atlas for any fictional universe.
+Serkonia is a static browser-based worldbuilding tool. It can be used as a personal setting wiki, a tabletop campaign hub, a lore portal for players, or a lightweight interactive atlas for any fictional universe. Serkonia title is placeholder for all meanings of the world name for all new sites.
 
 The project is intentionally system-agnostic. You can adapt it for DnD, Pathfinder, Starfinder, custom sci-fi settings, historical worlds, or anything else that benefits from a map, timeline, archive, and character roster.
 
